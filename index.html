@@ -19,6 +19,8 @@
 :root{
   --paper:#EEF0E8; --ink:#16241F; --ink-soft:#5A6961; --line:#A7B2A2;
   --hedge:#2E5B3A; --gold:#C08A1E; --pin:#C4185C; --blood:#8A2020; --sky:#9FB6C4;
+  --safe-b:env(safe-area-inset-bottom, 0px);
+  --safe-t:env(safe-area-inset-top, 0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:var(--sky);
@@ -30,7 +32,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:v
 .mono{font-family:'IBM Plex Mono',monospace;}
 
 /* ---------- HUD ---------- */
-#hud{position:fixed;top:12px;left:50%;transform:translateX(-50%);display:none;flex-direction:column;
+#hud{position:fixed;top:calc(12px + var(--safe-t));left:50%;transform:translateX(-50%);display:none;flex-direction:column;
   align-items:center;gap:6px;z-index:20;pointer-events:none;}
 #hud.visible{display:flex;}
 #hudStrip{display:flex;background:var(--paper);border:1.5px solid var(--ink);border-radius:6px;
@@ -80,15 +82,15 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:v
   background:radial-gradient(circle at 32% 26%, rgba(192,138,30,0.4), rgba(22,36,31,0) 46%),
              linear-gradient(155deg, rgba(70,50,20,0.95), rgba(16,26,20,0.95));
   box-shadow:0 2px 5px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.15), inset 0 -2px 4px rgba(0,0,0,0.5);}
-#btnFwd{left:78px;bottom:152px;}
-#btnBack{left:78px;bottom:20px;}
-#btnLeft{left:18px;bottom:86px;}
-#btnRight{left:138px;bottom:86px;}
-#btnTurnL{right:140px;bottom:20px;border-color:rgba(120,196,140,0.6);
+#btnFwd{left:84px;bottom:calc(168px + var(--safe-b));}
+#btnBack{left:84px;bottom:calc(30px + var(--safe-b));}
+#btnLeft{left:20px;bottom:calc(99px + var(--safe-b));}
+#btnRight{left:148px;bottom:calc(99px + var(--safe-b));}
+#btnTurnL{right:150px;bottom:calc(30px + var(--safe-b));border-color:rgba(120,196,140,0.6);
   box-shadow:0 4px 10px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.2), inset 0 -3px 6px rgba(0,0,0,0.4), 0 0 0 1px rgba(120,196,140,0.18);}
-#btnTurnR{right:20px;bottom:20px;border-color:rgba(120,196,140,0.6);
+#btnTurnR{right:24px;bottom:calc(30px + var(--safe-b));border-color:rgba(120,196,140,0.6);
   box-shadow:0 4px 10px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.2), inset 0 -3px 6px rgba(0,0,0,0.4), 0 0 0 1px rgba(120,196,140,0.18);}
-#btnMap{right:78px;bottom:98px;width:68px;height:68px;
+#btnMap{right:82px;bottom:calc(112px + var(--safe-b));width:68px;height:68px;
   background:radial-gradient(circle at 32% 26%, rgba(255,255,255,0.22), rgba(22,36,31,0) 42%),
              linear-gradient(155deg, rgba(64,48,16,0.95), rgba(20,15,6,0.95));
   border:1px solid rgba(192,138,30,0.65);flex-direction:column;gap:2px;}
@@ -128,10 +130,38 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:v
 #mapOverlay{position:fixed;inset:0;background:var(--paper);display:none;z-index:40;}
 #mapOverlay.visible{display:block;}
 #mapCanvas{width:100%;height:100%;display:block;}
-#mapCloseBtn{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:41;}
+#mapCloseBtn{position:absolute;bottom:calc(20px + var(--safe-b));left:50%;transform:translateX(-50%);z-index:41;}
+
+/* ---------- loading screen (pure HTML/CSS: visible instantly, before the
+   Three.js CDN script or any JS has even had a chance to run) ---------- */
+#loadingScreen{position:fixed;inset:0;background:var(--sky);z-index:100;
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity 0.4s ease;}
+#loadingScreen.hidden{opacity:0;pointer-events:none;}
+.loadingBar{width:220px;height:8px;border-radius:4px;background:rgba(22,36,31,0.15);
+  overflow:hidden;margin:18px auto 10px;}
+.loadingBarFill{width:40%;height:100%;border-radius:4px;
+  background:linear-gradient(90deg, var(--hedge), var(--gold));
+  animation:loadingSlide 1.1s ease-in-out infinite;}
+@keyframes loadingSlide{
+  0%{transform:translateX(-120%);}
+  100%{transform:translateX(340%);}
+}
+.loadingSlow{opacity:0;font-size:11px;color:var(--ink-soft);margin-top:2px;
+  animation:loadingSlowFadeIn 0.6s ease forwards;animation-delay:6s;}
+@keyframes loadingSlowFadeIn{ to{opacity:1;} }
 </style>
 </head>
 <body>
+
+<div id="loadingScreen">
+  <div class="card">
+    <h1 class="heading">HEDGEROW</h1>
+    <div class="loadingBar"><div class="loadingBarFill"></div></div>
+    <p id="loadingLabel">Growing the hedges&hellip;</p>
+    <p class="loadingSlow">Still loading &mdash; check your connection if this takes a while.</p>
+  </div>
+</div>
 
 <div id="viewport"><canvas id="gameCanvas"></canvas></div>
 
@@ -213,7 +243,9 @@ var CS        = 3.2;
 var WALL_H    = 4.6;
 var EYE       = 1.68;
 var RADIUS    = 0.85;
-var SPEED     = 5.0;
+var SPEED     = 5.0;   // walk speed (LOCKED base value)
+var SPEED_RUN = 8.2;   // run speed - unlocked once a movement input is held past RUN_HOLD_MS
+var RUN_HOLD_MS = 220; // hold duration before walk becomes a run; a quick tap always stays a walk
 var TURN_RATE = 3.4;
 var FREE_PEEKS  = 10;
 var PEEK_COST   = 10;
@@ -232,6 +264,8 @@ var textureGrass, textureHedge;
 
 var player = { x:0, z:0, yaw:0, pitch:0 };
 var moveState = { fwd:false, back:false, left:false, right:false, turnL:false, turnR:false };
+var moveHoldStart = 0; // timestamp movement began; held past RUN_HOLD_MS = running
+var isRunning = false;
 var look = { dragging:false, lastX:0, lastY:0, touchId:null };
 
 var gameState = 'home'; // home | playing | race | cleared | caught
@@ -1054,16 +1088,18 @@ function buildFirstPersonBody(){
   bodyParts.bobAmp = 0;
 }
 
-function updateBodyAnim(dt, moving){
-  bodyParts.stepPhase += dt*(moving ? 9.2 : 1.6);
+function updateBodyAnim(dt, moving, running){
+  var stepRate = moving ? (running ? 13.5 : 9.2) : 1.6;
+  bodyParts.stepPhase += dt*stepRate;
   var target = moving ? 1 : 0;
   bodyParts.bobAmp += (target-bodyParts.bobAmp)*Math.min(1, dt*7);
+  var bobScale = running ? 1.35 : 1.0;
 
-  camera.position.y = EYE + Math.sin(bodyParts.stepPhase*2)*0.055*bodyParts.bobAmp;
-  camera.rotation.z = Math.cos(bodyParts.stepPhase)*0.024*bodyParts.bobAmp;
+  camera.position.y = EYE + Math.sin(bodyParts.stepPhase*2)*0.055*bodyParts.bobAmp*bobScale;
+  camera.rotation.z = Math.cos(bodyParts.stepPhase)*0.024*bodyParts.bobAmp*bobScale;
 
-  var armSwing = Math.sin(bodyParts.stepPhase)*0.55*bodyParts.bobAmp;
-  var legSwing = Math.sin(bodyParts.stepPhase)*0.62*bodyParts.bobAmp;
+  var armSwing = Math.sin(bodyParts.stepPhase)*0.55*bodyParts.bobAmp*bobScale;
+  var legSwing = Math.sin(bodyParts.stepPhase)*0.62*bodyParts.bobAmp*bobScale;
 
   if(moving){
     bodyParts.armL.rotation.x = bodyParts.armBaseX + armSwing;
@@ -1127,14 +1163,26 @@ function updatePlayerMovement(dt){
   if(moveState.right){ moveX+=right.x; moveZ+=right.z; moving=true; }
   if(moveState.left){ moveX-=right.x; moveZ-=right.z; moving=true; }
 
+  // Walk vs run: a quick tap never crosses RUN_HOLD_MS, so it's always a
+  // walk; keeping a movement input held (button or key) past that threshold
+  // breaks into a run until released.
+  if(moving){
+    if(moveHoldStart===0) moveHoldStart = performance.now();
+    isRunning = (performance.now()-moveHoldStart) > RUN_HOLD_MS;
+  } else {
+    moveHoldStart = 0;
+    isRunning = false;
+  }
+  var speed = isRunning ? SPEED_RUN : SPEED;
+
   var len = Math.sqrt(moveX*moveX+moveZ*moveZ);
   if(len>1e-5){
     moveX/=len; moveZ/=len;
-    tryMove(moveX*SPEED*dt, moveZ*SPEED*dt);
+    tryMove(moveX*speed*dt, moveZ*speed*dt);
   }
 
   camera.position.set(player.x, EYE, player.z);
-  updateBodyAnim(dt, moving);
+  updateBodyAnim(dt, moving, isRunning);
 }
 
 /* =========================================================================
@@ -1625,6 +1673,118 @@ function updateHUD(){
 }
 
 /* =========================================================================
+   AUDIO - soft ambient pad + light "sparkle" layer, Web Audio only
+   (no audio files, matching the rest of the game's procedural approach).
+   A tension bus rises smoothly whenever a hunter is actively chasing.
+   ========================================================================= */
+var audioCtx = null, audioMaster = null, audioTensionGain = null, audioStarted = false;
+var sparkleScale = [392.00, 440.00, 523.25, 587.33, 659.25, 783.99]; // G4 A4 C5 D5 E5 G5
+
+function initAudio(){
+  function resume(){
+    if(audioStarted) return;
+    audioStarted = true;
+    try{
+      var AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
+      buildAmbientMusic();
+    } catch(e){}
+    window.removeEventListener('pointerdown', resume);
+    window.removeEventListener('keydown', resume);
+  }
+  window.addEventListener('pointerdown', resume);
+  window.addEventListener('keydown', resume);
+}
+
+function buildAmbientMusic(){
+  audioMaster = audioCtx.createGain();
+  audioMaster.gain.value = 0.5;
+  audioMaster.connect(audioCtx.destination);
+
+  var padGain = audioCtx.createGain();
+  padGain.gain.value = 0.16;
+  var filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 900;
+  filter.Q.value = 0.6;
+  padGain.connect(filter);
+  filter.connect(audioMaster);
+
+  var padFreqs = [98.00, 123.47, 146.83]; // soft open chord, G2 B2 D3
+  var i;
+  for(i=0;i<padFreqs.length;i++){
+    var osc = audioCtx.createOscillator();
+    osc.type = i===0 ? 'sine' : 'triangle';
+    osc.frequency.value = padFreqs[i];
+    var detuneLfo = audioCtx.createOscillator();
+    detuneLfo.frequency.value = 0.05 + i*0.02;
+    var detuneLfoGain = audioCtx.createGain();
+    detuneLfoGain.gain.value = 4;
+    detuneLfo.connect(detuneLfoGain);
+    detuneLfoGain.connect(osc.detune);
+    detuneLfo.start();
+    osc.connect(padGain);
+    osc.start();
+  }
+
+  var filterLfo = audioCtx.createOscillator();
+  filterLfo.frequency.value = 0.045;
+  var filterLfoGain = audioCtx.createGain();
+  filterLfoGain.gain.value = 260;
+  filterLfo.connect(filterLfoGain);
+  filterLfoGain.connect(filter.frequency);
+  filterLfo.start();
+
+  audioTensionGain = audioCtx.createGain();
+  audioTensionGain.gain.value = 0.0;
+  audioTensionGain.connect(audioMaster);
+  var tensionOsc = audioCtx.createOscillator();
+  tensionOsc.type = 'sawtooth';
+  tensionOsc.frequency.value = 55;
+  var tensionFilter = audioCtx.createBiquadFilter();
+  tensionFilter.type = 'lowpass';
+  tensionFilter.frequency.value = 220;
+  tensionOsc.connect(tensionFilter);
+  tensionFilter.connect(audioTensionGain);
+  tensionOsc.start();
+
+  scheduleSparkle();
+}
+
+// Loosely-timed soft plucked notes on a pentatonic scale - a light,
+// slightly excited feeling without becoming full composed music.
+function scheduleSparkle(){
+  if(!audioCtx) return;
+  var delay = 1.6 + Math.random()*2.6;
+  setTimeout(function(){
+    playSparkleNote();
+    scheduleSparkle();
+  }, delay*1000);
+}
+function playSparkleNote(){
+  if(!audioCtx || !audioMaster) return;
+  var freq = sparkleScale[Math.floor(Math.random()*sparkleScale.length)];
+  var osc = audioCtx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  var g = audioCtx.createGain();
+  osc.connect(g);
+  g.connect(audioMaster);
+  var now = audioCtx.currentTime;
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(0.06, now+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001, now+1.4);
+  osc.start(now);
+  osc.stop(now+1.5);
+}
+
+function updateAudioTension(chasingActive){
+  if(!audioCtx || !audioTensionGain) return;
+  var target = chasingActive ? 0.12 : 0.0;
+  audioTensionGain.gain.setTargetAtTime(target, audioCtx.currentTime, 0.4);
+}
+
+/* =========================================================================
    MAIN LOOP
    ========================================================================= */
 function animate(){
@@ -1642,6 +1802,11 @@ function animate(){
       updateRivals(dt);
       updatePlayerRaceProgress();
     }
+    var chasingActive = false, ci;
+    for(ci=0;ci<hunters.length;ci++){ if(hunters[ci].chasing){ chasingActive = true; break; } }
+    updateAudioTension(chasingActive);
+  } else {
+    updateAudioTension(false);
   }
   updateHUD();
   renderer.render(scene, camera);
@@ -1650,13 +1815,22 @@ function animate(){
 /* =========================================================================
    INIT
    ========================================================================= */
+function hideLoadingScreen(){
+  var el = document.getElementById('loadingScreen');
+  if(!el) return;
+  el.classList.add('hidden');
+  setTimeout(function(){ el.style.display = 'none'; }, 450);
+}
+
 function init(){
   setupRenderer();
   setupTextures();
   buildFirstPersonBody();
   bindControls();
+  initAudio();
   showHome();
   requestAnimationFrame(animate);
+  hideLoadingScreen();
 }
 init();
 

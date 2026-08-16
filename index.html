@@ -67,20 +67,33 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:v
 /* ---------- touch controls ---------- */
 #touchControls{position:fixed;inset:0;pointer-events:none;display:none;z-index:15;}
 #touchControls.visible{display:block;}
-.ctrlBtn{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(238,240,232,0.82);
-  border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;font-size:22px;
-  pointer-events:auto;color:var(--ink);}
-.ctrlBtn:active{background:rgba(192,138,30,0.4);}
+.ctrlBtn{position:absolute;width:60px;height:60px;border-radius:50%;
+  background:radial-gradient(circle at 32% 26%, rgba(255,255,255,0.24), rgba(22,36,31,0) 42%),
+             linear-gradient(155deg, rgba(42,60,50,0.92), rgba(14,22,17,0.92));
+  border:1px solid rgba(238,240,232,0.32);
+  box-shadow:0 4px 10px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -3px 6px rgba(0,0,0,0.4);
+  display:flex;align-items:center;justify-content:center;font-size:24px;
+  pointer-events:auto;color:var(--paper);text-shadow:0 1px 2px rgba(0,0,0,0.6);
+  touch-action:none;-webkit-user-select:none;user-select:none;
+  transition:transform 0.08s ease, box-shadow 0.08s ease;}
+.ctrlBtn:active{transform:scale(0.9);
+  background:radial-gradient(circle at 32% 26%, rgba(192,138,30,0.4), rgba(22,36,31,0) 46%),
+             linear-gradient(155deg, rgba(70,50,20,0.95), rgba(16,26,20,0.95));
+  box-shadow:0 2px 5px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.15), inset 0 -2px 4px rgba(0,0,0,0.5);}
 #btnFwd{left:78px;bottom:152px;}
 #btnBack{left:78px;bottom:20px;}
 #btnLeft{left:18px;bottom:86px;}
 #btnRight{left:138px;bottom:86px;}
-#btnTurnL{right:140px;bottom:20px;border-color:var(--hedge);color:var(--hedge);}
-#btnTurnR{right:20px;bottom:20px;border-color:var(--hedge);color:var(--hedge);}
-#btnMap{right:80px;bottom:100px;width:62px;height:62px;background:var(--paper);border:2px solid var(--ink);
-  flex-direction:column;gap:2px;}
-#mapBtnLabel{font-size:8.5px;font-family:'IBM Plex Mono',monospace;}
-#mapBtnLabel.pink{color:var(--pin);}
+#btnTurnL{right:140px;bottom:20px;border-color:rgba(120,196,140,0.6);
+  box-shadow:0 4px 10px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.2), inset 0 -3px 6px rgba(0,0,0,0.4), 0 0 0 1px rgba(120,196,140,0.18);}
+#btnTurnR{right:20px;bottom:20px;border-color:rgba(120,196,140,0.6);
+  box-shadow:0 4px 10px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.2), inset 0 -3px 6px rgba(0,0,0,0.4), 0 0 0 1px rgba(120,196,140,0.18);}
+#btnMap{right:78px;bottom:98px;width:68px;height:68px;
+  background:radial-gradient(circle at 32% 26%, rgba(255,255,255,0.22), rgba(22,36,31,0) 42%),
+             linear-gradient(155deg, rgba(64,48,16,0.95), rgba(20,15,6,0.95));
+  border:1px solid rgba(192,138,30,0.65);flex-direction:column;gap:2px;}
+#mapBtnLabel{font-size:9px;font-family:'IBM Plex Mono',monospace;color:var(--paper);opacity:0.9;}
+#mapBtnLabel.pink{color:#ff7fb0;opacity:1;}
 
 /* ---------- overlay screens ---------- */
 .screen{position:fixed;inset:0;background:rgba(22,36,31,0.58);display:none;align-items:center;
@@ -93,10 +106,19 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:v
 .card p{color:var(--ink-soft);margin:4px 0 16px;font-size:13px;line-height:1.5;}
 .card .stats{font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.85;margin-bottom:18px;
   text-align:left;background:rgba(167,178,162,0.2);padding:10px 16px;border-radius:6px;}
-.btn{font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;padding:11px 22px;border-radius:6px;
-  border:1.5px solid var(--ink);background:var(--hedge);color:var(--paper);cursor:pointer;margin:4px;}
-.btn:disabled{background:var(--line);color:var(--ink-soft);cursor:not-allowed;border-color:var(--line);}
-.btn.secondary{background:var(--paper);color:var(--ink);}
+.btn{font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;padding:12px 24px;border-radius:8px;
+  border:1px solid rgba(22,36,31,0.3);background:linear-gradient(180deg,#3f7350,#20452c);
+  color:var(--paper);cursor:pointer;margin:5px;letter-spacing:0.02em;
+  box-shadow:0 3px 0 #15301e, 0 6px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.28);
+  transition:transform 0.08s ease, box-shadow 0.08s ease;}
+.btn:active{transform:translateY(2px);
+  box-shadow:0 1px 0 #15301e, 0 2px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.18);}
+.btn:disabled{background:linear-gradient(180deg,#bcc5b6,#9aa595);color:var(--ink-soft);cursor:not-allowed;
+  border-color:rgba(90,105,97,0.3);box-shadow:0 3px 0 rgba(90,105,97,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+  transform:none;}
+.btn.secondary{background:linear-gradient(180deg,#fbfbf8,#e2e5db);color:var(--ink);
+  box-shadow:0 3px 0 #b7c0b0, 0 6px 12px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.7);}
+.btn.secondary:active{box-shadow:0 1px 0 #b7c0b0, 0 2px 6px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.5);}
 .keydots{display:flex;gap:8px;justify-content:center;margin:14px 0;}
 .keydot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--gold);background:transparent;}
 .keydot.filled{background:var(--gold);}
@@ -210,7 +232,7 @@ var textureGrass, textureHedge;
 
 var player = { x:0, z:0, yaw:0, pitch:0 };
 var moveState = { fwd:false, back:false, left:false, right:false, turnL:false, turnR:false };
-var look = { dragging:false, lastX:0, lastY:0 };
+var look = { dragging:false, lastX:0, lastY:0, touchId:null };
 
 var gameState = 'home'; // home | playing | race | cleared | caught
 var level = 1;          // trial number 1..5 (kept at 5 during grand)
@@ -412,37 +434,167 @@ function bfsNextStepSafe(cells, N, sr, sc, tr, tc, pathSet){
 /* =========================================================================
    PROCEDURAL TEXTURES  (section 2 - no external image files)
    ========================================================================= */
-function makeNoiseTexture(base, alts, size){
-  var canvas = document.createElement('canvas');
-  canvas.width = size; canvas.height = size;
-  var ctx = canvas.getContext('2d');
-  ctx.fillStyle = base;
-  ctx.fillRect(0,0,size,size);
-  var n = Math.floor(size*size/34);
-  var i;
-  for(i=0;i<n;i++){
-    ctx.fillStyle = alts[Math.floor(Math.random()*alts.length)];
-    ctx.globalAlpha = 0.32 + Math.random()*0.42;
-    var x = Math.random()*size, y = Math.random()*size;
-    var rw = 1.4 + Math.random()*3.6, rh = 0.9 + Math.random()*2.6;
-    ctx.save();
-    ctx.translate(x,y);
-    ctx.rotate(Math.random()*Math.PI);
-    ctx.beginPath();
-    ctx.ellipse(0,0,rw,rh,0,0,Math.PI*2);
-    ctx.fill();
-    ctx.restore();
-  }
-  ctx.globalAlpha = 1;
+function finishTexture(canvas){
   var tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
   return tex;
 }
 
+// Real grass has: a mottled soil base, thousands of thin individual blades
+// leaning in slightly varied directions, sunlit tips, and fine shadow flecks
+// at the roots. Layering those (still 100% procedural canvas, no images)
+// reads as actual turf instead of a blobby green pattern.
+function makeGrassTexture(size){
+  var canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  var ctx = canvas.getContext('2d');
+  var i, x, y, r, col, grad;
+
+  ctx.fillStyle = '#4C6636';
+  ctx.fillRect(0,0,size,size);
+
+  var patchColors = ['#557A3E','#3E5A2C','#5C8146','#476B33'];
+  for(i=0;i<20;i++){
+    x = Math.random()*size; y = Math.random()*size;
+    r = size*(0.12+Math.random()*0.22);
+    col = patchColors[Math.floor(Math.random()*patchColors.length)];
+    grad = ctx.createRadialGradient(x,y,0,x,y,r);
+    grad.addColorStop(0, col);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  var bladeColors = ['#6B9049','#527539','#3F5E2C','#7A9E52','#4A6B34'];
+  var bladeCount = Math.floor(size*size/9);
+  ctx.lineCap = 'round';
+  for(i=0;i<bladeCount;i++){
+    x = Math.random()*size; y = Math.random()*size;
+    var len = size*(0.02+Math.random()*0.045);
+    var lean = (Math.random()-0.5)*0.9;
+    ctx.strokeStyle = bladeColors[Math.floor(Math.random()*bladeColors.length)];
+    ctx.globalAlpha = 0.55+Math.random()*0.4;
+    ctx.lineWidth = 0.6+Math.random()*1.1;
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.quadraticCurveTo(x+lean*len*0.5, y-len*0.6, x+lean*len, y-len);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  var hiCount = Math.floor(size*size/40);
+  for(i=0;i<hiCount;i++){
+    x = Math.random()*size; y = Math.random()*size;
+    var len2 = size*(0.015+Math.random()*0.03);
+    var lean2 = (Math.random()-0.5)*0.8;
+    ctx.strokeStyle = '#A8C97C';
+    ctx.globalAlpha = 0.28+Math.random()*0.25;
+    ctx.lineWidth = 0.6+Math.random()*0.7;
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.quadraticCurveTo(x+lean2*len2*0.5, y-len2*0.6, x+lean2*len2, y-len2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  var specks = Math.floor(size*size/60);
+  for(i=0;i<specks;i++){
+    x = Math.random()*size; y = Math.random()*size;
+    ctx.fillStyle = '#25341A';
+    ctx.globalAlpha = 0.18+Math.random()*0.18;
+    var rr = 0.6+Math.random()*1.3;
+    ctx.beginPath();
+    ctx.ellipse(x,y,rr,rr*0.6,Math.random()*Math.PI,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  return finishTexture(canvas);
+}
+
+// Hedge = dense small overlapping leaf clumps rather than big soft blobs,
+// with dark gaps between clumps and tiny sunlit fleck highlights, so it
+// reads as trimmed foliage instead of a flat green wall.
+function makeHedgeTexture(size){
+  var canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  var ctx = canvas.getContext('2d');
+  var i, j, x, y, r, col, grad;
+
+  ctx.fillStyle = '#24462E';
+  ctx.fillRect(0,0,size,size);
+
+  var patchColors = ['#2E5B3A','#1F3F28','#356745','#274F32'];
+  for(i=0;i<26;i++){
+    x = Math.random()*size; y = Math.random()*size;
+    r = size*(0.08+Math.random()*0.16);
+    col = patchColors[Math.floor(Math.random()*patchColors.length)];
+    grad = ctx.createRadialGradient(x,y,0,x,y,r);
+    grad.addColorStop(0, col);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  var leafColors = ['#3D7049','#2E5B3A','#1F3F28','#478257','#274F32'];
+  var clusters = Math.floor(size*size/900);
+  for(i=0;i<clusters;i++){
+    var cx = Math.random()*size, cy = Math.random()*size;
+    var clumpSize = 3+Math.floor(Math.random()*5);
+    for(j=0;j<clumpSize;j++){
+      var lx = cx+(Math.random()-0.5)*size*0.05;
+      var ly = cy+(Math.random()-0.5)*size*0.05;
+      var lw = size*(0.006+Math.random()*0.012);
+      var lh = lw*(0.6+Math.random()*0.5);
+      ctx.fillStyle = leafColors[Math.floor(Math.random()*leafColors.length)];
+      ctx.globalAlpha = 0.55+Math.random()*0.35;
+      ctx.save();
+      ctx.translate(lx,ly);
+      ctx.rotate(Math.random()*Math.PI);
+      ctx.beginPath();
+      ctx.ellipse(0,0,lw,lh,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  var hi = Math.floor(size*size/500);
+  for(i=0;i<hi;i++){
+    x = Math.random()*size; y = Math.random()*size;
+    ctx.fillStyle = '#6FA36E';
+    ctx.globalAlpha = 0.2+Math.random()*0.25;
+    var rr2 = size*(0.004+Math.random()*0.006);
+    ctx.beginPath();
+    ctx.ellipse(x,y,rr2,rr2*0.7,Math.random()*Math.PI,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  var gaps = Math.floor(size*size/450);
+  for(i=0;i<gaps;i++){
+    x = Math.random()*size; y = Math.random()*size;
+    ctx.fillStyle = '#0F2216';
+    ctx.globalAlpha = 0.25+Math.random()*0.25;
+    var gr = size*(0.004+Math.random()*0.009);
+    ctx.beginPath();
+    ctx.ellipse(x,y,gr,gr*0.7,Math.random()*Math.PI,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  return finishTexture(canvas);
+}
+
 function setupTextures(){
-  textureGrass = makeNoiseTexture('#5C7A44', ['#6B8B4F','#4E6B39','#75974F','#456031'], 256);
-  textureHedge = makeNoiseTexture('#2E5B3A', ['#356745','#274F32','#3D7049','#1F3F28'], 256);
+  textureGrass = makeGrassTexture(512);
+  textureHedge = makeHedgeTexture(512);
   textureHedge.repeat.set(2,2);
 }
 
@@ -1001,6 +1153,7 @@ function releaseAll(){
   moveState.fwd = moveState.back = moveState.left = moveState.right = false;
   moveState.turnL = moveState.turnR = false;
   look.dragging = false;
+  look.touchId = null;
 }
 
 function onKeyDown(e){
@@ -1041,21 +1194,38 @@ function bindControls(){
   });
   window.addEventListener('mouseup', function(){ look.dragging = false; });
 
+  // Track a specific touch identifier for the look-drag, rather than
+  // requiring "exactly one touch on the whole screen" - that broke look-drag
+  // the instant a second finger was holding any on-screen button.
   canvasEl.addEventListener('touchstart', function(e){
-    if(e.touches.length===1){
+    if(look.touchId===null && e.changedTouches.length>0){
+      var t = e.changedTouches[0];
+      look.touchId = t.identifier;
       look.dragging = true;
-      look.lastX = e.touches[0].clientX; look.lastY = e.touches[0].clientY;
+      look.lastX = t.clientX; look.lastY = t.clientY;
     }
   }, { passive:true });
   canvasEl.addEventListener('touchmove', function(e){
-    if(!look.dragging || e.touches.length!==1) return;
-    var t = e.touches[0];
+    if(!look.dragging || look.touchId===null) return;
+    var i, t = null;
+    for(i=0;i<e.changedTouches.length;i++){
+      if(e.changedTouches[i].identifier===look.touchId){ t = e.changedTouches[i]; break; }
+    }
+    if(!t) return;
     var dx = t.clientX-look.lastX, dy = t.clientY-look.lastY;
     look.lastX = t.clientX; look.lastY = t.clientY;
     applyLook(dx,dy,0.008);
   }, { passive:true });
-  canvasEl.addEventListener('touchend', function(){ look.dragging = false; });
-  canvasEl.addEventListener('touchcancel', function(){ look.dragging = false; });
+  function endCanvasTouch(e){
+    var i;
+    for(i=0;i<e.changedTouches.length;i++){
+      if(e.changedTouches[i].identifier===look.touchId){
+        look.dragging = false; look.touchId = null; break;
+      }
+    }
+  }
+  canvasEl.addEventListener('touchend', endCanvasTouch);
+  canvasEl.addEventListener('touchcancel', endCanvasTouch);
 
   bindHoldButton('btnFwd',   function(v){ moveState.fwd = v; });
   bindHoldButton('btnBack',  function(v){ moveState.back = v; });

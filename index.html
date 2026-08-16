@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Hedgerow</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2E5B3A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hedgerow">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@800&family=Archivo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF0E8; --ink:#16241F; --ink-soft:#5A6961; --line:#A7B2A2;
+  --hedge:#2E5B3A; --gold:#C08A1E; --pin:#C4185C; --blood:#8A2020; --sky:#9FB6C4;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:var(--sky);
+  font-family:'Archivo',sans-serif;color:var(--ink);touch-action:none;overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+#viewport{position:fixed;inset:0;}
+#gameCanvas{width:100%;height:100%;display:block;touch-action:none;}
+.heading{font-family:'Bricolage Grotesque',serif;font-weight:800;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;top:12px;left:50%;transform:translateX(-50%);display:none;flex-direction:column;
+  align-items:center;gap:6px;z-index:20;pointer-events:none;}
+#hud.visible{display:flex;}
+#hudStrip{display:flex;background:var(--paper);border:1.5px solid var(--ink);border-radius:6px;
+  overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+.hudCell{padding:6px 11px;text-align:center;border-right:1px solid var(--line);min-width:58px;}
+.hudCell:last-child{border-right:none;}
+.hudCell .lbl{font-size:9px;letter-spacing:0.07em;text-transform:uppercase;color:var(--ink-soft);}
+.hudCell .val{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;}
+
+#compassStrip{width:280px;height:22px;overflow:hidden;position:relative;background:rgba(238,240,232,0.88);
+  border:1px solid var(--ink);border-radius:4px;}
+#compassTrack{position:absolute;top:2px;left:140px;height:100%;}
+.compassTick{position:absolute;top:0;font-size:11px;font-family:'IBM Plex Mono',monospace;
+  color:var(--ink-soft);transform:translateX(-50%);white-space:nowrap;}
+.compassTick.north{color:var(--pin);font-weight:700;}
+#compassStrip::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--pin);}
+
+#chaseAlert{margin-top:2px;padding:6px 18px;background:var(--paper);border:1.5px solid var(--blood);
+  border-radius:6px;color:var(--blood);font-weight:700;font-size:13px;display:none;align-items:center;
+  gap:8px;animation:pulse 0.6s infinite alternate;}
+#chaseAlert.visible{display:flex;}
+@keyframes pulse{from{box-shadow:0 0 0 rgba(138,32,32,0);}to{box-shadow:0 0 16px rgba(138,32,32,0.6);}}
+
+#raceBoard{margin-top:4px;background:var(--paper);border:1.5px solid var(--ink);border-radius:6px;
+  padding:8px 10px;width:250px;display:none;}
+#raceBoard.visible{display:block;}
+.raceRow{display:flex;align-items:center;gap:6px;margin:3px 0;font-size:10.5px;}
+.raceRow .name{width:52px;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.raceRow .track{flex:1;height:7px;background:var(--line);border-radius:4px;overflow:hidden;}
+.raceRow .fill{height:100%;width:0%;transition:width 0.1s linear;}
+.raceRow.player .fill{background:var(--hedge);}
+.raceRow.rival .fill{background:var(--blood);}
+
+/* ---------- touch controls ---------- */
+#touchControls{position:fixed;inset:0;pointer-events:none;display:none;z-index:15;}
+#touchControls.visible{display:block;}
+.ctrlBtn{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(238,240,232,0.82);
+  border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;font-size:22px;
+  pointer-events:auto;color:var(--ink);}
+.ctrlBtn:active{background:rgba(192,138,30,0.4);}
+#btnFwd{left:78px;bottom:152px;}
+#btnBack{left:78px;bottom:20px;}
+#btnLeft{left:18px;bottom:86px;}
+#btnRight{left:138px;bottom:86px;}
+#btnTurnL{right:140px;bottom:20px;border-color:var(--hedge);color:var(--hedge);}
+#btnTurnR{right:20px;bottom:20px;border-color:var(--hedge);color:var(--hedge);}
+#btnMap{right:80px;bottom:100px;width:62px;height:62px;background:var(--paper);border:2px solid var(--ink);
+  flex-direction:column;gap:2px;}
+#mapBtnLabel{font-size:8.5px;font-family:'IBM Plex Mono',monospace;}
+#mapBtnLabel.pink{color:var(--pin);}
+
+/* ---------- overlay screens ---------- */
+.screen{position:fixed;inset:0;background:rgba(22,36,31,0.58);display:none;align-items:center;
+  justify-content:center;z-index:30;}
+.screen.visible{display:flex;}
+.card{background:var(--paper);border:1.5px solid var(--ink);border-radius:10px;padding:30px 34px;
+  max-width:420px;width:88%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.4);}
+.card h1{font-size:28px;margin:0 0 6px;}
+.card h2{font-size:21px;margin:0 0 12px;}
+.card p{color:var(--ink-soft);margin:4px 0 16px;font-size:13px;line-height:1.5;}
+.card .stats{font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.85;margin-bottom:18px;
+  text-align:left;background:rgba(167,178,162,0.2);padding:10px 16px;border-radius:6px;}
+.btn{font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;padding:11px 22px;border-radius:6px;
+  border:1.5px solid var(--ink);background:var(--hedge);color:var(--paper);cursor:pointer;margin:4px;}
+.btn:disabled{background:var(--line);color:var(--ink-soft);cursor:not-allowed;border-color:var(--line);}
+.btn.secondary{background:var(--paper);color:var(--ink);}
+.keydots{display:flex;gap:8px;justify-content:center;margin:14px 0;}
+.keydot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--gold);background:transparent;}
+.keydot.filled{background:var(--gold);}
+.hint{font-size:11px;color:var(--ink-soft);margin-top:10px;line-height:1.6;}
+
+/* ---------- map ---------- */
+#mapOverlay{position:fixed;inset:0;background:var(--paper);display:none;z-index:40;}
+#mapOverlay.visible{display:block;}
+#mapCanvas{width:100%;height:100%;display:block;}
+#mapCloseBtn{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:41;}
+</style>
+</head>
+<body>
+
+<div id="viewport"><canvas id="gameCanvas"></canvas></div>
+
+<div id="hud">
+  <div id="hudStrip">
+    <div class="hudCell"><div class="lbl">Maze</div><div class="val" id="hudMaze">-</div></div>
+    <div class="hudCell"><div class="lbl">Brain</div><div class="val" id="hudBrain">1</div></div>
+    <div class="hudCell"><div class="lbl">Keys</div><div class="val" id="hudKeys">0/5</div></div>
+    <div class="hudCell"><div class="lbl">Time</div><div class="val" id="hudTime">00:00</div></div>
+    <div class="hudCell"><div class="lbl">Maps</div><div class="val" id="hudMaps">10 free</div></div>
+    <div class="hudCell"><div class="lbl">Hunters</div><div class="val" id="hudHunters">0</div></div>
+  </div>
+  <div id="compassStrip"><div id="compassTrack"></div></div>
+  <div id="chaseAlert">HUNTER ON YOU &mdash; <span id="chaseCountdown">10s</span></div>
+  <div id="raceBoard">
+    <div class="raceRow player"><div class="name">You</div><div class="track"><div class="fill" id="raceRowPlayer"></div></div></div>
+    <div class="raceRow rival"><div class="name" id="raceName0">Arjun</div><div class="track"><div class="fill" id="raceRival0"></div></div></div>
+    <div class="raceRow rival"><div class="name" id="raceName1">Kavya</div><div class="track"><div class="fill" id="raceRival1"></div></div></div>
+    <div class="raceRow rival"><div class="name" id="raceName2">Rohan</div><div class="track"><div class="fill" id="raceRival2"></div></div></div>
+  </div>
+</div>
+
+<div id="touchControls">
+  <div class="ctrlBtn" id="btnFwd">&#9650;</div>
+  <div class="ctrlBtn" id="btnBack">&#9660;</div>
+  <div class="ctrlBtn" id="btnLeft">&#9664;</div>
+  <div class="ctrlBtn" id="btnRight">&#9654;</div>
+  <div class="ctrlBtn" id="btnTurnL">&#8634;</div>
+  <div class="ctrlBtn" id="btnTurnR">&#8635;</div>
+  <div class="ctrlBtn" id="btnMap"><span>&#9670;</span><span id="mapBtnLabel">10 free</span></div>
+</div>
+
+<div id="mapOverlay">
+  <canvas id="mapCanvas"></canvas>
+  <button class="btn secondary" id="mapCloseBtn">Close Map (M)</button>
+</div>
+
+<div class="screen" id="homeScreen">
+  <div class="card">
+    <h1 class="heading">HEDGEROW</h1>
+    <p id="homeLevelLabel">Trial 1 of 5</p>
+    <div class="keydots" id="keyDots"></div>
+    <p class="mono" style="margin-bottom:20px;">Brain Level: <span id="brainLabel">1</span></p>
+    <div>
+      <button class="btn" id="btnTrial">Enter Trial 1</button>
+      <button class="btn secondary" id="btnGrand" disabled>Grand Maze</button>
+    </div>
+    <p class="hint">Drag the screen to look. Move with the on-screen cross or WASD.<br>
+    Stay on the true path from gate to gate &mdash; hunters can never set foot there.</p>
+  </div>
+</div>
+
+<div class="screen" id="clearedScreen">
+  <div class="card">
+    <h2 class="heading" id="clearedTitle" style="color:var(--hedge);">Trial Cleared</h2>
+    <div class="stats" id="clearedStats"></div>
+    <button class="btn" id="btnClearedContinue">Continue</button>
+  </div>
+</div>
+
+<div class="screen" id="caughtScreen">
+  <div class="card">
+    <h2 class="heading" style="color:var(--blood);">Caught</h2>
+    <p id="attemptLabel">Attempt 2</p>
+    <button class="btn" id="btnRetry">Try Again</button>
+    <button class="btn secondary" id="btnGiveUp">Back to Gatehouse</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* =========================================================================
+   1-2. CONSTANTS  (section 3 of the brief)
+   ========================================================================= */
+var CS        = 3.2;
+var WALL_H    = 4.6;
+var EYE       = 1.68;
+var RADIUS    = 0.85;
+var SPEED     = 5.0;
+var TURN_RATE = 3.4;
+var FREE_PEEKS  = 10;
+var PEEK_COST   = 10;
+var E_WANDER  = 2.5;
+var E_CHASE   = 3.5;
+var E_SEE     = 5;
+var CHASE_LIMIT = 10;
+var CHASE_COOL  = 7;
+var SKY = 0x9FB6C4;
+
+/* =========================================================================
+   GLOBAL STATE
+   ========================================================================= */
+var scene, camera, renderer, clock;
+var textureGrass, textureHedge;
+
+var player = { x:0, z:0, yaw:0, pitch:0 };
+var moveState = { fwd:false, back:false, left:false, right:false, turnL:false, turnR:false };
+var look = { dragging:false, lastX:0, lastY:0 };
+
+var gameState = 'home'; // home | playing | race | cleared | caught
+var level = 1;          // trial number 1..5 (kept at 5 during grand)
+var isGrand = false;
+var keysCollected = 0;
+var brain = 1;
+var totalScore = 0;
+var elapsed = 0;
+var peeks = 0;
+var attempt = 1;
+var mapOpen = false;
+var hasKeyThisLevel = false;
+
+var G_cells = null, G_N = 0, G_solid = null, G_D = 0;
+var G_pathList = [], G_pathSet = {}, G_pathIdx = {};
+var G_gateR = 0, G_gateC = 0;
+
+var hunters = [];
+var levelObjects = [];
+var keyMesh = null, gateMesh = null;
+
+var rivals = [];
+var playerFurthestIdx = 0;
+
+var bodyParts = {};
+
+/* =========================================================================
+   4. MAZE GENERATION  (section 4 of the brief)
+   ========================================================================= */
+function generateMazeCells(N){
+  var cells = [];
+  var i;
+  for(i=0;i<N*N;i++) cells.push({ n:true, e:true, s:true, w:true, visited:false });
+  function idx(r,c){ return r*N+c; }
+  var stack = [{r:0,c:0}];
+  cells[idx(0,0)].visited = true;
+  var opp = { n:'s', s:'n', e:'w', w:'e' };
+  while(stack.length>0){
+    var cur = stack[stack.length-1];
+    var neighbors = [];
+    if(cur.r>0 && !cells[idx(cur.r-1,cur.c)].visited) neighbors.push({dir:'n', r:cur.r-1, c:cur.c});
+    if(cur.c<N-1 && !cells[idx(cur.r,cur.c+1)].visited) neighbors.push({dir:'e', r:cur.r, c:cur.c+1});
+    if(cur.r<N-1 && !cells[idx(cur.r+1,cur.c)].visited) neighbors.push({dir:'s', r:cur.r+1, c:cur.c});
+    if(cur.c>0 && !cells[idx(cur.r,cur.c-1)].visited) neighbors.push({dir:'w', r:cur.r, c:cur.c-1});
+    if(neighbors.length===0){ stack.pop(); continue; }
+    var pick = neighbors[Math.floor(Math.random()*neighbors.length)];
+    cells[idx(cur.r,cur.c)][pick.dir] = false;
+    cells[idx(pick.r,pick.c)][opp[pick.dir]] = false;
+    cells[idx(pick.r,pick.c)].visited = true;
+    stack.push({r:pick.r, c:pick.c});
+  }
+  return cells;
+}
+
+function rasterizeCells(cells, N){
+  var D = 2*N+1;
+  var solid = new Array(D*D);
+  var i;
+  for(i=0;i<D*D;i++) solid[i] = true;
+  function bidx(r,c){ return r*D+c; }
+  var r,c;
+  for(r=0;r<N;r++){
+    for(c=0;c<N;c++){
+      var cell = cells[r*N+c];
+      var br = 2*r+1, bc = 2*c+1;
+      solid[bidx(br,bc)] = false;
+      if(!cell.n) solid[bidx(br-1,bc)] = false;
+      if(!cell.s) solid[bidx(br+1,bc)] = false;
+      if(!cell.e) solid[bidx(br,bc+1)] = false;
+      if(!cell.w) solid[bidx(br,bc-1)] = false;
+    }
+  }
+  return { solid:solid, D:D };
+}
+
+function cellNeighbors(cells, N, r, c){
+  var cell = cells[r*N+c];
+  var res = [];
+  if(!cell.n && r>0) res.push({r:r-1,c:c});
+  if(!cell.s && r<N-1) res.push({r:r+1,c:c});
+  if(!cell.e && c<N-1) res.push({r:r,c:c+1});
+  if(!cell.w && c>0) res.push({r:r,c:c-1});
+  return res;
+}
+
+function bfsFarthest(cells, N, sr, sc){
+  var dist = new Array(N*N);
+  var i;
+  for(i=0;i<N*N;i++) dist[i] = -1;
+  dist[sr*N+sc] = 0;
+  var q = [{r:sr,c:sc}];
+  var qi = 0;
+  var farthest = {r:sr,c:sc};
+  var maxD = 0;
+  while(qi<q.length){
+    var cur = q[qi++];
+    var d = dist[cur.r*N+cur.c];
+    if(d>maxD){ maxD=d; farthest={r:cur.r,c:cur.c}; }
+    var neigh = cellNeighbors(cells,N,cur.r,cur.c);
+    var k;
+    for(k=0;k<neigh.length;k++){
+      var nb = neigh[k];
+      if(dist[nb.r*N+nb.c]===-1){
+        dist[nb.r*N+nb.c] = d+1;
+        q.push(nb);
+      }
+    }
+  }
+  return { farthest:farthest, dist:dist };
+}
+
+function shortestPath(cells, N, sr, sc, er, ec){
+  var prev = new Array(N*N);
+  var visited = new Array(N*N);
+  var i;
+  for(i=0;i<N*N;i++){ prev[i]=null; visited[i]=false; }
+  visited[sr*N+sc] = true;
+  var q = [{r:sr,c:sc}];
+  var qi = 0;
+  while(qi<q.length){
+    var cur = q[qi++];
+    if(cur.r===er && cur.c===ec) break;
+    var neigh = cellNeighbors(cells,N,cur.r,cur.c);
+    var k;
+    for(k=0;k<neigh.length;k++){
+      var nb = neigh[k];
+      var ni = nb.r*N+nb.c;
+      if(!visited[ni]){
+        visited[ni] = true;
+        prev[ni] = {r:cur.r, c:cur.c};
+        q.push(nb);
+      }
+    }
+  }
+  var path = [];
+  var cur2 = {r:er, c:ec};
+  while(cur2){
+    path.push({r:cur2.r, c:cur2.c});
+    cur2 = prev[cur2.r*N+cur2.c];
+  }
+  path.reverse();
+  return path;
+}
+
+function pathKey(r,c){ return r+'_'+c; }
+function buildPathSet(path){
+  var s = {}, i;
+  for(i=0;i<path.length;i++) s[pathKey(path[i].r,path[i].c)] = true;
+  return s;
+}
+function buildPathIdx(path){
+  var m = {}, i;
+  for(i=0;i<path.length;i++) m[pathKey(path[i].r,path[i].c)] = i;
+  return m;
+}
+
+function cellWorldPos(r,c){ return { x:(2*c+1)*CS, z:(2*r+1)*CS }; }
+function worldToCell(x,z){
+  return { r: Math.round(z/(2*CS) - 0.5), c: Math.round(x/(2*CS) - 0.5) };
+}
+
+/* =========================================================================
+   5. TRUE PATH RULE helpers  (section 5 of the brief, LOCKED)
+   ========================================================================= */
+function openDirsSafe(cells, N, r, c, pathSet){
+  var neigh = cellNeighbors(cells, N, r, c);
+  var res = [], i;
+  for(i=0;i<neigh.length;i++){
+    var nb = neigh[i];
+    if(!pathSet[pathKey(nb.r,nb.c)]) res.push(nb);
+  }
+  return res;
+}
+
+function bfsNextStepSafe(cells, N, sr, sc, tr, tc, pathSet){
+  if(sr===tr && sc===tc) return null;
+  var visited = {};
+  visited[pathKey(sr,sc)] = true;
+  var q = [{r:sr,c:sc, first:null}];
+  var qi = 0;
+  while(qi<q.length){
+    var cur = q[qi++];
+    var neigh = cellNeighbors(cells, N, cur.r, cur.c);
+    var i;
+    for(i=0;i<neigh.length;i++){
+      var nb = neigh[i];
+      var key = pathKey(nb.r,nb.c);
+      if(visited[key]) continue;
+      if(pathSet[key]) continue; // hunters cannot walk onto path cells
+      var firstStep = cur.first || {r:nb.r, c:nb.c};
+      if(nb.r===tr && nb.c===tc) return firstStep;
+      visited[key] = true;
+      q.push({ r:nb.r, c:nb.c, first:firstStep });
+    }
+  }
+  return null;
+}
+
+/* =========================================================================
+   PROCEDURAL TEXTURES  (section 2 - no external image files)
+   ========================================================================= */
+function makeNoiseTexture(base, alts, size){
+  var canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  var ctx = canvas.getContext('2d');
+  ctx.fillStyle = base;
+  ctx.fillRect(0,0,size,size);
+  var n = Math.floor(size*size/34);
+  var i;
+  for(i=0;i<n;i++){
+    ctx.fillStyle = alts[Math.floor(Math.random()*alts.length)];
+    ctx.globalAlpha = 0.32 + Math.random()*0.42;
+    var x = Math.random()*size, y = Math.random()*size;
+    var rw = 1.4 + Math.random()*3.6, rh = 0.9 + Math.random()*2.6;
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(Math.random()*Math.PI);
+    ctx.beginPath();
+    ctx.ellipse(0,0,rw,rh,0,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  var tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function setupTextures(){
+  textureGrass = makeNoiseTexture('#5C7A44', ['#6B8B4F','#4E6B39','#75974F','#456031'], 256);
+  textureHedge = makeNoiseTexture('#2E5B3A', ['#356745','#274F32','#3D7049','#1F3F28'], 256);
+  textureHedge.repeat.set(2,2);
+}
+
+/* =========================================================================
+   RENDERER / SCENE
+   ========================================================================= */
+function setupRenderer(){
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(SKY);
+  scene.fog = new THREE.Fog(SKY, CS*2.2, CS*9);
+
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.05, 200);
+  camera.rotation.order = 'YXZ';
+
+  var canvasEl = document.getElementById('gameCanvas');
+  renderer = new THREE.WebGLRenderer({ canvas:canvasEl, antialias:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x4c5c46, 0.95));
+  var sun = new THREE.DirectionalLight(0xfff4de, 0.85);
+  sun.position.set(30,50,20);
+  scene.add(sun);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.22));
+
+  window.addEventListener('resize', onResize);
+  clock = new THREE.Clock();
+}
+
+function onResize(){
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+/* =========================================================================
+   LEVEL BUILD
+   ========================================================================= */
+function clearLevelObjects(){
+  var i;
+  for(i=0;i<levelObjects.length;i++) scene.remove(levelObjects[i]);
+  levelObjects = [];
+  for(i=0;i<hunters.length;i++) scene.remove(hunters[i].mesh);
+  hunters = [];
+  if(keyMesh){ scene.remove(keyMesh); keyMesh = null; }
+  if(gateMesh){ scene.remove(gateMesh); gateMesh = null; }
+}
+
+function buildGround(D){
+  var margin = CS*20;
+  var size = D*CS + margin*2;
+  var geo = new THREE.PlaneGeometry(size, size);
+  var tex = textureGrass.clone();
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(size/3, size/3);
+  tex.needsUpdate = true;
+  var mat = new THREE.MeshStandardMaterial({ map:tex, roughness:1 });
+  var mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI/2;
+  mesh.position.set((D-1)*CS/2, 0, (D-1)*CS/2);
+  scene.add(mesh);
+  return mesh;
+}
+
+function buildHedges(solid, D){
+  var count = 0, i;
+  for(i=0;i<solid.length;i++) if(solid[i]) count++;
+  var geo = new THREE.BoxGeometry(CS, WALL_H, CS);
+  var mat = new THREE.MeshStandardMaterial({ map:textureHedge, roughness:1 });
+  var mesh = new THREE.InstancedMesh(geo, mat, count);
+  var dummy = new THREE.Object3D();
+  var idx = 0, r, c;
+  for(r=0;r<D;r++){
+    for(c=0;c<D;c++){
+      if(solid[r*D+c]){
+        dummy.position.set(c*CS, WALL_H/2, r*CS);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(idx, dummy.matrix);
+        idx++;
+      }
+    }
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
+  return mesh;
+}
+
+function buildGateMesh(){
+  var g = new THREE.Group();
+  var postMat = new THREE.MeshStandardMaterial({ color:0x4B3A2A, roughness:0.9 });
+  var doorMat = new THREE.MeshStandardMaterial({ color:0x8C8878, roughness:0.55, metalness:0.15 });
+  var postL = new THREE.Mesh(new THREE.BoxGeometry(0.3, WALL_H, 0.3), postMat);
+  postL.position.set(-CS/2+0.22, WALL_H/2, 0);
+  g.add(postL);
+  var postR = new THREE.Mesh(new THREE.BoxGeometry(0.3, WALL_H, 0.3), postMat);
+  postR.position.set(CS/2-0.22, WALL_H/2, 0);
+  g.add(postR);
+  var beam = new THREE.Mesh(new THREE.BoxGeometry(CS, 0.3, 0.3), postMat);
+  beam.position.set(0, WALL_H-0.15, 0);
+  g.add(beam);
+  var door = new THREE.Mesh(new THREE.BoxGeometry(CS-0.7, WALL_H-0.5, 0.18), doorMat);
+  door.position.set(0, (WALL_H-0.5)/2, 0);
+  g.add(door);
+  g.userData.door = door;
+  return g;
+}
+
+function updateGateAppearance(){
+  if(!gateMesh) return;
+  var open = isGrand || hasKeyThisLevel;
+  gateMesh.userData.door.material.color.set(open ? 0xE0A82E : 0x8C8878);
+}
+
+function buildKeyMesh(){
+  var g = new THREE.Group();
+  var mat = new THREE.MeshBasicMaterial({ color:0xE0C233 });
+  var bow = new THREE.Mesh(new THREE.TorusGeometry(0.22,0.055,8,16), mat);
+  bow.rotation.x = Math.PI/2;
+  bow.position.y = 0.34;
+  g.add(bow);
+  var shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.5,8), mat);
+  shaft.position.y = -0.02;
+  g.add(shaft);
+  var tooth1 = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.06,0.06), mat);
+  tooth1.position.set(0.09,-0.22,0);
+  g.add(tooth1);
+  var tooth2 = new THREE.Mesh(new THREE.BoxGeometry(0.10,0.06,0.06), mat);
+  tooth2.position.set(0.07,-0.32,0);
+  g.add(tooth2);
+  g.scale.setScalar(1.25);
+  return g;
+}
+
+function placeKey(cells, N, pathSet, distFromEntrance){
+  var maxD = 0, i;
+  for(i=0;i<distFromEntrance.length;i++) if(distFromEntrance[i]>maxD) maxD = distFromEntrance[i];
+  var lo = Math.floor(maxD*0.35), hi = Math.ceil(maxD*0.8);
+  var candidates = [], r, c;
+  for(r=0;r<N;r++){
+    for(c=0;c<N;c++){
+      if(pathSet[pathKey(r,c)]) continue;
+      var d = distFromEntrance[r*N+c];
+      if(d>=lo && d<=hi) candidates.push({r:r,c:c});
+    }
+  }
+  if(candidates.length===0){
+    for(r=0;r<N;r++) for(c=0;c<N;c++) if(!pathSet[pathKey(r,c)]) candidates.push({r:r,c:c});
+  }
+  var pick = candidates[Math.floor(Math.random()*candidates.length)];
+  var wp = cellWorldPos(pick.r, pick.c);
+  keyMesh = buildKeyMesh();
+  keyMesh.position.set(wp.x, 1.1, wp.z);
+  scene.add(keyMesh);
+}
+
+function pickHunterSpawns(cells, N, pathSet, count, distFromEntrance){
+  var candidates = [], r, c;
+  for(r=0;r<N;r++){
+    for(c=0;c<N;c++){
+      if(pathSet[pathKey(r,c)]) continue;
+      var neigh = cellNeighbors(cells,N,r,c);
+      if(neigh.length===1 && distFromEntrance[r*N+c]>=3){
+        candidates.push({ r:r, c:c, dist:distFromEntrance[r*N+c] });
+      }
+    }
+  }
+  candidates.sort(function(a,b){ return b.dist - a.dist; });
+  return candidates.slice(0, count);
+}
+
+function startLevel(spec){
+  clearLevelObjects();
+  isGrand = spec.grand;
+  level = spec.level;
+  var N = spec.N;
+
+  var cells = generateMazeCells(N);
+  var raster = rasterizeCells(cells, N);
+  var bfsRes = bfsFarthest(cells, N, 0, 0);
+  var path = shortestPath(cells, N, 0, 0, bfsRes.farthest.r, bfsRes.farthest.c);
+
+  G_cells = cells; G_N = N; G_solid = raster.solid; G_D = raster.D;
+  G_pathList = path; G_pathSet = buildPathSet(path); G_pathIdx = buildPathIdx(path);
+  G_gateR = bfsRes.farthest.r; G_gateC = bfsRes.farthest.c;
+
+  var ground = buildGround(G_D);
+  levelObjects.push(ground);
+  var hedges = buildHedges(G_solid, G_D);
+  levelObjects.push(hedges);
+
+  gateMesh = buildGateMesh();
+  var gp = cellWorldPos(G_gateR, G_gateC);
+  gateMesh.position.set(gp.x, 0, gp.z);
+  scene.add(gateMesh);
+  levelObjects.push(gateMesh);
+
+  hasKeyThisLevel = isGrand;
+  if(!isGrand) placeKey(cells, N, G_pathSet, bfsRes.dist);
+  updateGateAppearance();
+
+  var hunterCount = isGrand ? Math.min(3+brain, 8) : Math.min(1+Math.floor(level/2), 3);
+  var spawns = pickHunterSpawns(cells, N, G_pathSet, hunterCount, bfsRes.dist);
+  hunters = [];
+  var i;
+  for(i=0;i<spawns.length;i++) hunters.push(new Hunter(spawns[i]));
+
+  player.x = CS; player.z = CS; player.yaw = 0; player.pitch = 0;
+  elapsed = 0; peeks = 0; attempt = 1; playerFurthestIdx = 0;
+  updateMapButtonLabel();
+
+  if(isGrand) setupRivals(path.length);
+
+  gameState = isGrand ? 'race' : 'playing';
+  showGameUI();
+}
+
+/* =========================================================================
+   6. HUNTERS  (section 6 of the brief, LOCKED chase/escape cycle)
+   ========================================================================= */
+function buildHunterMesh(){
+  var g = new THREE.Group();
+  var bodyMat = new THREE.MeshStandardMaterial({ color:0x0A0A0C, roughness:0.9 });
+  var eyeMat = new THREE.MeshBasicMaterial({ color:0xCC1414 });
+
+  var torso = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.95,0.38), bodyMat);
+  torso.position.y = 1.15;
+  g.add(torso);
+
+  var head = new THREE.Mesh(new THREE.SphereGeometry(0.26,12,10), bodyMat);
+  head.position.y = 1.78;
+  g.add(head);
+
+  var eyeGeo = new THREE.SphereGeometry(0.045,6,6);
+  var eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.09,1.80,0.235); g.add(eyeL);
+  var eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.09,1.80,0.235); g.add(eyeR);
+
+  function makeLimb(len, rad){
+    var pivot = new THREE.Group();
+    var mesh = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad*0.85, len, 8), bodyMat);
+    mesh.position.y = -len/2;
+    pivot.add(mesh);
+    return pivot;
+  }
+
+  var armL = makeLimb(0.62,0.085); armL.position.set(-0.36,1.55,0); g.add(armL);
+  var armR = makeLimb(0.62,0.085); armR.position.set(0.36,1.55,0); g.add(armR);
+  var legL = makeLimb(0.78,0.11);  legL.position.set(-0.16,0.78,0); g.add(legL);
+  var legR = makeLimb(0.78,0.11);  legR.position.set(0.16,0.78,0); g.add(legR);
+
+  g.userData.armL = armL; g.userData.armR = armR;
+  g.userData.legL = legL; g.userData.legR = legR;
+  return g;
+}
+
+function Hunter(spawnCell){
+  this.homeR = spawnCell.r; this.homeC = spawnCell.c;
+  this.r = spawnCell.r; this.c = spawnCell.c;
+  this.tr = spawnCell.r; this.tc = spawnCell.c;
+  this.t = 1;
+  this.chasing = false;
+  this.chaseT = CHASE_LIMIT;
+  this.cool = 0;
+  this.scale = 1;
+  this.phase = Math.random()*10;
+  this.lastDir = null;
+  this._fadingIn = false;
+  this.mesh = buildHunterMesh();
+  scene.add(this.mesh);
+  var wp = cellWorldPos(this.r, this.c);
+  this.mesh.position.set(wp.x, 0, wp.z);
+}
+
+Hunter.prototype.pickNext = function(cells, N, pathSet, playerR, playerC){
+  var options = openDirsSafe(cells, N, this.r, this.c, pathSet);
+  if(options.length===0) return { r:this.r, c:this.c };
+  if(this.chasing){
+    var step = bfsNextStepSafe(cells, N, this.r, this.c, playerR, playerC, pathSet);
+    if(step) return step;
+  }
+  var filtered = options;
+  if(this.lastDir && options.length>1){
+    var revR = this.r - this.lastDir.dr, revC = this.c - this.lastDir.dc;
+    filtered = options.filter(function(o){ return !(o.r===revR && o.c===revC); });
+    if(filtered.length===0) filtered = options;
+  }
+  return filtered[Math.floor(Math.random()*filtered.length)];
+};
+
+Hunter.prototype.giveUp = function(){
+  this.scale = 0.02;
+  this.r = this.homeR; this.c = this.homeC;
+  this.tr = this.homeR; this.tc = this.homeC;
+  this.t = 1;
+  this.cool = CHASE_COOL;
+  this._fadingIn = true;
+  this.chaseT = CHASE_LIMIT;
+  var wp = cellWorldPos(this.r, this.c);
+  this.mesh.position.set(wp.x, 0, wp.z);
+};
+
+Hunter.prototype.update = function(dt, cells, N, pathSet, playerCellR, playerCellC, playerOnPath){
+  if(this.cool>0){ this.cool -= dt; if(this.cool<0) this.cool = 0; }
+
+  var manhattan = Math.abs(this.r-playerCellR) + Math.abs(this.c-playerCellC);
+  var canChaseNow = this.cool<=0 && !playerOnPath;
+
+  if(!this.chasing){
+    if(canChaseNow && manhattan<=E_SEE && this.chaseT>0) this.chasing = true;
+  } else if(playerOnPath){
+    this.chasing = false; // rule: hunters do not chase at all while player is on the true path
+  }
+
+  if(this.chasing){
+    this.chaseT -= dt;
+    if(this.chaseT<=0){
+      this.chaseT = 0;
+      this.chasing = false;
+      this.giveUp();
+    }
+  } else if(this.chaseT>0 && this.chaseT<CHASE_LIMIT){
+    this.chaseT -= dt*1.5;
+    if(this.chaseT<=0) this.chaseT = CHASE_LIMIT; // fully calmed down
+  }
+
+  var speed = this.chasing ? E_CHASE : E_WANDER;
+
+  if(this.t<1){
+    this.t += (speed*dt)/(2*CS);
+    if(this.t>1) this.t = 1;
+  } else {
+    this.r = this.tr; this.c = this.tc;
+    var nextCell = this.pickNext(cells, N, pathSet, playerCellR, playerCellC);
+    if(nextCell){
+      this.lastDir = { dr: nextCell.r-this.r, dc: nextCell.c-this.c };
+      this.tr = nextCell.r; this.tc = nextCell.c;
+      this.t = 0;
+    }
+  }
+
+  var p0 = cellWorldPos(this.r, this.c);
+  var p1 = cellWorldPos(this.tr, this.tc);
+  var wx = p0.x + (p1.x-p0.x)*this.t;
+  var wz = p0.z + (p1.z-p0.z)*this.t;
+  var dx = p1.x-p0.x, dz = p1.z-p0.z;
+  if(dx!==0 || dz!==0) this.mesh.rotation.y = Math.atan2(dx, dz);
+
+  if(this._fadingIn){
+    this.scale += dt*1.8;
+    if(this.scale>=1){ this.scale=1; this._fadingIn=false; }
+  }
+  this.mesh.scale.setScalar(this.scale);
+  this.mesh.position.set(wx, 0, wz);
+
+  this.phase += dt*speed*2.6;
+  var swing = Math.sin(this.phase)*0.55;
+  this.mesh.userData.armL.rotation.x = swing;
+  this.mesh.userData.armR.rotation.x = -swing;
+  this.mesh.userData.legL.rotation.x = -swing;
+  this.mesh.userData.legR.rotation.x = swing;
+};
+
+function updateHunters(dt){
+  var pcell = worldToCell(player.x, player.z);
+  var onPath = !!G_pathSet[pathKey(pcell.r,pcell.c)];
+  var i;
+  for(i=0;i<hunters.length;i++) hunters[i].update(dt, G_cells, G_N, G_pathSet, pcell.r, pcell.c, onPath);
+}
+
+function checkCatch(){
+  var i;
+  for(i=0;i<hunters.length;i++){
+    var h = hunters[i];
+    if(!h.chasing) continue;
+    var dx = h.mesh.position.x - player.x;
+    var dz = h.mesh.position.z - player.z;
+    if(Math.sqrt(dx*dx+dz*dz) < 1.15){ onCaught(); return; }
+  }
+}
+
+/* =========================================================================
+   FIRST-PERSON BODY  (section 11 of the brief)
+   ========================================================================= */
+function buildFirstPersonBody(){
+  var skinMat = new THREE.MeshStandardMaterial({ color:0xC28B60, roughness:0.8 });
+  var sleeveMat = new THREE.MeshStandardMaterial({ color:0x33513C, roughness:0.9 });
+  var shoeMat = new THREE.MeshStandardMaterial({ color:0x1C1C1C, roughness:0.7 });
+
+  function buildFinger(){
+    var fpivot = new THREE.Group();
+    var seg1 = new THREE.Mesh(new THREE.BoxGeometry(0.016,0.045,0.016), skinMat);
+    seg1.position.y = -0.02;
+    fpivot.add(seg1);
+    var pivot2 = new THREE.Group();
+    pivot2.position.y = -0.045;
+    pivot2.rotation.x = -0.9;
+    var seg2 = new THREE.Mesh(new THREE.BoxGeometry(0.014,0.035,0.014), skinMat);
+    seg2.position.y = -0.017;
+    pivot2.add(seg2);
+    fpivot.add(pivot2);
+    return fpivot;
+  }
+
+  function buildArm(side){
+    var pivot = new THREE.Group();
+    var sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.065,0.34,8), sleeveMat);
+    sleeve.position.y = -0.17;
+    pivot.add(sleeve);
+
+    var hand = new THREE.Group();
+    hand.position.y = -0.36;
+    var palm = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.10,0.05), skinMat);
+    hand.add(palm);
+    var i;
+    for(i=0;i<4;i++){
+      var f = buildFinger();
+      f.position.set(-0.03+i*0.02, -0.05, 0.02);
+      hand.add(f);
+    }
+    var thumbPivot = new THREE.Group();
+    thumbPivot.position.set(side==='L'?0.045:-0.045, -0.02, 0.01);
+    thumbPivot.rotation.z = side==='L' ? 0.6 : -0.6;
+    var thumb = new THREE.Mesh(new THREE.BoxGeometry(0.015,0.04,0.015), skinMat);
+    thumb.position.y = -0.018;
+    thumbPivot.add(thumb);
+    hand.add(thumbPivot);
+    pivot.add(hand);
+
+    var sx = side==='L' ? -0.46 : 0.46;
+    pivot.position.set(sx, -0.55, -0.02);
+    pivot.rotation.z = side==='L' ? 0.30 : -0.30;
+    pivot.rotation.y = side==='L' ? 0.16 : -0.16;
+    pivot.rotation.x = -0.30;
+    return pivot;
+  }
+
+  function buildLeg(side){
+    var pivot = new THREE.Group();
+    var thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.09,0.5,8), sleeveMat);
+    thigh.position.y = -0.25;
+    pivot.add(thigh);
+    var shoe = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.09,0.24), shoeMat);
+    shoe.position.set(0,-0.55,0.05);
+    pivot.add(shoe);
+    var sx = side==='L' ? -0.17 : 0.17;
+    pivot.position.set(sx, -0.72, 0);
+    return pivot;
+  }
+
+  var armL = buildArm('L'), armR = buildArm('R');
+  var legL = buildLeg('L'), legR = buildLeg('R');
+  camera.add(armL); camera.add(armR); camera.add(legL); camera.add(legR);
+
+  bodyParts.armL = armL; bodyParts.armR = armR;
+  bodyParts.legL = legL; bodyParts.legR = legR;
+  bodyParts.armBaseX = -0.30;
+  bodyParts.stepPhase = 0;
+  bodyParts.bobAmp = 0;
+}
+
+function updateBodyAnim(dt, moving){
+  bodyParts.stepPhase += dt*(moving ? 9.2 : 1.6);
+  var target = moving ? 1 : 0;
+  bodyParts.bobAmp += (target-bodyParts.bobAmp)*Math.min(1, dt*7);
+
+  camera.position.y = EYE + Math.sin(bodyParts.stepPhase*2)*0.055*bodyParts.bobAmp;
+  camera.rotation.z = Math.cos(bodyParts.stepPhase)*0.024*bodyParts.bobAmp;
+
+  var armSwing = Math.sin(bodyParts.stepPhase)*0.55*bodyParts.bobAmp;
+  var legSwing = Math.sin(bodyParts.stepPhase)*0.62*bodyParts.bobAmp;
+
+  if(moving){
+    bodyParts.armL.rotation.x = bodyParts.armBaseX + armSwing;
+    bodyParts.armR.rotation.x = bodyParts.armBaseX - armSwing;
+  } else {
+    var drift = Math.sin(performance.now()*0.0006)*0.02;
+    bodyParts.armL.rotation.x = bodyParts.armBaseX + drift;
+    bodyParts.armR.rotation.x = bodyParts.armBaseX - drift;
+  }
+  bodyParts.legL.rotation.x = -legSwing;
+  bodyParts.legR.rotation.x = legSwing;
+}
+
+/* =========================================================================
+   COLLISION + MOVEMENT
+   ========================================================================= */
+function isSolidBlock(r,c){
+  if(r<0 || c<0 || r>=G_D || c>=G_D) return true;
+  return G_solid[r*G_D+c];
+}
+function collides(x,z){
+  var minC = Math.floor((x-RADIUS)/CS+0.5), maxC = Math.floor((x+RADIUS)/CS+0.5);
+  var minR = Math.floor((z-RADIUS)/CS+0.5), maxR = Math.floor((z+RADIUS)/CS+0.5);
+  var r,c;
+  for(r=minR;r<=maxR;r++) for(c=minC;c<=maxC;c++) if(isSolidBlock(r,c)) return true;
+  return false;
+}
+function tryMove(dx,dz){
+  var nx = player.x+dx, nz = player.z+dz;
+  if(!collides(nx, player.z)) player.x = nx;
+  if(!collides(player.x, nz)) player.z = nz;
+}
+
+function applyLook(dx,dy,sens){
+  player.yaw -= dx*sens;
+  player.pitch -= dy*sens;
+  if(player.pitch>1.2) player.pitch = 1.2;
+  if(player.pitch<-1.2) player.pitch = -1.2;
+}
+
+function updatePlayerMovement(dt){
+  var turn = 0;
+  if(moveState.turnL) turn += TURN_RATE*dt;
+  if(moveState.turnR) turn -= TURN_RATE*dt;
+  player.yaw += turn;
+
+  camera.rotation.x = player.pitch;
+  camera.rotation.y = player.yaw;
+  camera.rotation.z = 0;
+  camera.updateMatrixWorld(true);
+
+  var dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  dir.y = 0;
+  if(dir.lengthSq()>0) dir.normalize();
+  var right = new THREE.Vector3(-dir.z, 0, dir.x);
+
+  var moveX=0, moveZ=0, moving=false;
+  if(moveState.fwd){ moveX+=dir.x; moveZ+=dir.z; moving=true; }
+  if(moveState.back){ moveX-=dir.x; moveZ-=dir.z; moving=true; }
+  if(moveState.right){ moveX+=right.x; moveZ+=right.z; moving=true; }
+  if(moveState.left){ moveX-=right.x; moveZ-=right.z; moving=true; }
+
+  var len = Math.sqrt(moveX*moveX+moveZ*moveZ);
+  if(len>1e-5){
+    moveX/=len; moveZ/=len;
+    tryMove(moveX*SPEED*dt, moveZ*SPEED*dt);
+  }
+
+  camera.position.set(player.x, EYE, player.z);
+  updateBodyAnim(dt, moving);
+}
+
+/* =========================================================================
+   CONTROLS  (section 10 of the brief, LOCKED: no Pointer Lock)
+   ========================================================================= */
+function bindHoldButton(id, setter){
+  var el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('pointerdown', function(e){ e.preventDefault(); setter(true); });
+  el.addEventListener('pointerup', function(){ setter(false); });
+  el.addEventListener('pointerleave', function(){ setter(false); });
+  el.addEventListener('pointercancel', function(){ setter(false); });
+}
+
+function releaseAll(){
+  moveState.fwd = moveState.back = moveState.left = moveState.right = false;
+  moveState.turnL = moveState.turnR = false;
+  look.dragging = false;
+}
+
+function onKeyDown(e){
+  var k = e.key.toLowerCase();
+  if(k==='w'||k==='arrowup') moveState.fwd = true;
+  if(k==='s'||k==='arrowdown') moveState.back = true;
+  if(k==='a') moveState.left = true;
+  if(k==='d') moveState.right = true;
+  if(k==='q'||k==='arrowleft') moveState.turnL = true;
+  if(k==='e'||k==='arrowright') moveState.turnR = true;
+  if(k==='m') toggleMap();
+}
+function onKeyUp(e){
+  var k = e.key.toLowerCase();
+  if(k==='w'||k==='arrowup') moveState.fwd = false;
+  if(k==='s'||k==='arrowdown') moveState.back = false;
+  if(k==='a') moveState.left = false;
+  if(k==='d') moveState.right = false;
+  if(k==='q'||k==='arrowleft') moveState.turnL = false;
+  if(k==='e'||k==='arrowright') moveState.turnR = false;
+}
+
+function bindControls(){
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', releaseAll);
+  document.addEventListener('touchmove', function(e){ e.preventDefault(); }, { passive:false });
+
+  var canvasEl = document.getElementById('gameCanvas');
+  canvasEl.addEventListener('mousedown', function(e){
+    look.dragging = true; look.lastX = e.clientX; look.lastY = e.clientY;
+  });
+  window.addEventListener('mousemove', function(e){
+    if(!look.dragging) return;
+    var dx = e.clientX-look.lastX, dy = e.clientY-look.lastY;
+    look.lastX = e.clientX; look.lastY = e.clientY;
+    applyLook(dx,dy,0.0062);
+  });
+  window.addEventListener('mouseup', function(){ look.dragging = false; });
+
+  canvasEl.addEventListener('touchstart', function(e){
+    if(e.touches.length===1){
+      look.dragging = true;
+      look.lastX = e.touches[0].clientX; look.lastY = e.touches[0].clientY;
+    }
+  }, { passive:true });
+  canvasEl.addEventListener('touchmove', function(e){
+    if(!look.dragging || e.touches.length!==1) return;
+    var t = e.touches[0];
+    var dx = t.clientX-look.lastX, dy = t.clientY-look.lastY;
+    look.lastX = t.clientX; look.lastY = t.clientY;
+    applyLook(dx,dy,0.008);
+  }, { passive:true });
+  canvasEl.addEventListener('touchend', function(){ look.dragging = false; });
+  canvasEl.addEventListener('touchcancel', function(){ look.dragging = false; });
+
+  bindHoldButton('btnFwd',   function(v){ moveState.fwd = v; });
+  bindHoldButton('btnBack',  function(v){ moveState.back = v; });
+  bindHoldButton('btnLeft',  function(v){ moveState.left = v; });
+  bindHoldButton('btnRight', function(v){ moveState.right = v; });
+  bindHoldButton('btnTurnL', function(v){ moveState.turnL = v; });
+  bindHoldButton('btnTurnR', function(v){ moveState.turnR = v; });
+
+  document.getElementById('btnMap').addEventListener('click', toggleMap);
+  document.getElementById('mapCloseBtn').addEventListener('click', toggleMap);
+
+  document.getElementById('btnTrial').addEventListener('click', function(){
+    var lv = keysCollected+1;
+    startLevel({ grand:false, level:lv, N:5+lv });
+  });
+  document.getElementById('btnGrand').addEventListener('click', function(){
+    startLevel({ grand:true, level:5, N:Math.min(12+brain*2,22) });
+  });
+  document.getElementById('btnClearedContinue').addEventListener('click', showHome);
+  document.getElementById('btnRetry').addEventListener('click', retryLevel);
+  document.getElementById('btnGiveUp').addEventListener('click', showHome);
+}
+
+/* =========================================================================
+   12. MAP  (section 12 of the brief)
+   ========================================================================= */
+function updateMapButtonLabel(){
+  var remaining = FREE_PEEKS - peeks;
+  var lbl = document.getElementById('mapBtnLabel');
+  if(remaining>=0){ lbl.textContent = remaining+' free'; lbl.classList.remove('pink'); }
+  else { lbl.textContent = '+'+PEEK_COST+'s'; lbl.classList.add('pink'); }
+}
+
+function toggleMap(){
+  if(gameState!=='playing' && gameState!=='race') return;
+  mapOpen = !mapOpen;
+  if(mapOpen){
+    peeks++;
+    updateMapButtonLabel();
+    drawMap();
+    document.getElementById('mapOverlay').classList.add('visible');
+  } else {
+    document.getElementById('mapOverlay').classList.remove('visible');
+  }
+}
+
+function drawX(ctx,x,y,r){
+  ctx.beginPath();
+  ctx.moveTo(x-r,y-r); ctx.lineTo(x+r,y+r);
+  ctx.moveTo(x+r,y-r); ctx.lineTo(x-r,y+r);
+  ctx.stroke();
+}
+function drawTriangle(ctx,x,y,size,rot){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(rot);
+  ctx.beginPath();
+  ctx.moveTo(0,-size);
+  ctx.lineTo(size*0.7,size*0.6);
+  ctx.lineTo(-size*0.7,size*0.6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawMap(){
+  var canvasEl = document.getElementById('mapCanvas');
+  var ctx = canvasEl.getContext('2d');
+  var w = canvasEl.width = window.innerWidth;
+  var h = canvasEl.height = window.innerHeight;
+  ctx.fillStyle = '#EEF0E8';
+  ctx.fillRect(0,0,w,h);
+
+  var D = G_D;
+  var pad = 70;
+  var avail = Math.min(w,h) - pad*2;
+  var cellPx = avail/D;
+  var ox = (w - cellPx*D)/2;
+  var oy = (h - cellPx*D)/2;
+  var r,c;
+
+  ctx.fillStyle = '#2E5B3A';
+  for(r=0;r<D;r++){
+    for(c=0;c<D;c++){
+      if(G_solid[r*D+c]) ctx.fillRect(ox+c*cellPx, oy+r*cellPx, cellPx+0.6, cellPx+0.6);
+    }
+  }
+
+  ctx.strokeStyle = '#16241F';
+  ctx.lineWidth = 2;
+  drawX(ctx, ox+cellPx+cellPx/2, oy+cellPx+cellPx/2, cellPx*0.3);
+
+  var gBlockR = 2*G_gateR+1, gBlockC = 2*G_gateC+1;
+  ctx.fillStyle = (isGrand||hasKeyThisLevel) ? '#C08A1E' : '#8C8878';
+  ctx.beginPath();
+  ctx.arc(ox+gBlockC*cellPx+cellPx/2, oy+gBlockR*cellPx+cellPx/2, cellPx*0.35, 0, Math.PI*2);
+  ctx.fill();
+
+  if(keyMesh){
+    var kc = worldToCell(keyMesh.position.x, keyMesh.position.z);
+    var kBlockR = 2*kc.r+1, kBlockC = 2*kc.c+1;
+    ctx.strokeStyle = '#C08A1E';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(ox+kBlockC*cellPx+cellPx/2, oy+kBlockR*cellPx+cellPx/2, cellPx*0.3, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = '#8A2020';
+  var i;
+  for(i=0;i<hunters.length;i++){
+    var hp = hunters[i].mesh.position;
+    drawTriangle(ctx, ox+(hp.x/CS)*cellPx, oy+(hp.z/CS)*cellPx, cellPx*0.28, hunters[i].mesh.rotation.y);
+  }
+
+  var px = ox+(player.x/CS)*cellPx, py = oy+(player.z/CS)*cellPx;
+  var mapDir = new THREE.Vector3();
+  camera.getWorldDirection(mapDir);
+  var rot = Math.atan2(mapDir.x, -mapDir.z);
+
+  ctx.strokeStyle = '#16241F';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(px,py);
+  ctx.lineTo(px+mapDir.x*cellPx*0.9, py+mapDir.z*cellPx*0.9);
+  ctx.stroke();
+
+  ctx.fillStyle = '#2E5B3A';
+  ctx.beginPath();
+  ctx.arc(px,py,cellPx*0.2,0,Math.PI*2);
+  ctx.fill();
+  drawTriangle(ctx, px, py, cellPx*0.24, rot);
+
+  ctx.fillStyle = '#C4185C';
+  ctx.font = '700 20px Archivo, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('N', w/2, 30);
+}
+
+/* =========================================================================
+   KEY PICKUP + GATE
+   ========================================================================= */
+function updateKeyAnim(dt){
+  if(!keyMesh) return;
+  keyMesh.rotation.y += dt*1.6;
+  keyMesh.position.y = 1.1 + Math.sin(performance.now()*0.002)*0.12;
+  var dx = player.x-keyMesh.position.x, dz = player.z-keyMesh.position.z;
+  if(Math.sqrt(dx*dx+dz*dz) < 0.9){
+    scene.remove(keyMesh);
+    keyMesh = null;
+    hasKeyThisLevel = true;
+    updateGateAppearance();
+  }
+}
+
+function updateGateCheck(){
+  var gp = cellWorldPos(G_gateR, G_gateC);
+  var dx = player.x-gp.x, dz = player.z-gp.z;
+  if(Math.sqrt(dx*dx+dz*dz) < CS*0.6){
+    if(isGrand) onRaceFinish();
+    else if(hasKeyThisLevel) onLevelCleared();
+  }
+}
+
+/* =========================================================================
+   9. RACE MODE  (section 9 of the brief)
+   KNOWN GAP: rivals below are local AI, not real players. Real multiplayer
+   needs a Node + WebSocket server sharing a maze seed and broadcasting
+   positions - out of scope for this single HTML file (see build brief s.9).
+   ========================================================================= */
+function setupRivals(pathListLen){
+  var names = ['Arjun','Kavya','Rohan'];
+  rivals = [];
+  var i;
+  for(i=0;i<3;i++){
+    var dur = pathListLen*(2.05-brain*0.055);
+    dur *= 0.82 + Math.random()*0.45;
+    rivals.push({ name:names[i], duration:Math.max(1,dur), progress:0, finished:false });
+    var nameEl = document.getElementById('raceName'+i);
+    if(nameEl) nameEl.textContent = names[i];
+  }
+}
+function updateRivals(dt){
+  var i;
+  for(i=0;i<rivals.length;i++){
+    var rv = rivals[i];
+    if(rv.finished) continue;
+    rv.progress += dt/rv.duration;
+    if(rv.progress>=1){ rv.progress=1; rv.finished=true; }
+  }
+}
+function updatePlayerRaceProgress(){
+  var cell = worldToCell(player.x, player.z);
+  var idx = G_pathIdx[pathKey(cell.r,cell.c)];
+  if(idx!==undefined && idx>playerFurthestIdx) playerFurthestIdx = idx;
+}
+
+/* =========================================================================
+   8. BRAIN LEVEL / SCORE  (section 8 of the brief)
+   ========================================================================= */
+function clampInt(v,lo,hi){ return Math.max(lo, Math.min(hi,v)); }
+function computeScoreAndBrain(){
+  var adjustedTime = elapsed + Math.max(0, peeks-FREE_PEEKS)*PEEK_COST;
+  var base = isGrand ? 900 : 400;
+  var score = Math.max(40, Math.round(base + level*80 - adjustedTime*3));
+  totalScore += score;
+  brain = clampInt(1+Math.floor(totalScore/900), 1, 9);
+  return { score:score, adjustedTime:adjustedTime };
+}
+
+/* =========================================================================
+   GAME FLOW / SCREENS
+   ========================================================================= */
+function formatTime(s){
+  var m = Math.floor(s/60), sec = Math.floor(s%60);
+  return (m<10?'0':'')+m+':'+(sec<10?'0':'')+sec;
+}
+function ordinal(n){
+  var s = ['th','st','nd','rd'], v = n%100;
+  return n + (s[(v-20)%10] || s[v] || s[0]);
+}
+
+function showHome(){
+  gameState = 'home';
+  document.getElementById('homeScreen').classList.add('visible');
+  document.getElementById('clearedScreen').classList.remove('visible');
+  document.getElementById('caughtScreen').classList.remove('visible');
+  document.getElementById('mapOverlay').classList.remove('visible');
+  document.getElementById('hud').classList.remove('visible');
+  document.getElementById('touchControls').classList.remove('visible');
+  mapOpen = false;
+  updateHomeScreen();
+}
+
+function updateHomeScreen(){
+  var nextLevel = Math.min(keysCollected+1, 5);
+  document.getElementById('homeLevelLabel').textContent =
+    keysCollected<5 ? ('Trial '+nextLevel+' of 5') : 'All trials complete';
+  document.getElementById('brainLabel').textContent = brain;
+
+  var dotsEl = document.getElementById('keyDots');
+  dotsEl.innerHTML = '';
+  var i;
+  for(i=0;i<5;i++){
+    var d = document.createElement('span');
+    d.className = 'keydot'+(i<keysCollected ? ' filled' : '');
+    dotsEl.appendChild(d);
+  }
+
+  var grandBtn = document.getElementById('btnGrand');
+  grandBtn.disabled = keysCollected<5;
+  var trialBtn = document.getElementById('btnTrial');
+  trialBtn.disabled = keysCollected>=5;
+  trialBtn.textContent = keysCollected>=5 ? 'All Trials Cleared' : ('Enter Trial '+nextLevel);
+}
+
+function showGameUI(){
+  document.getElementById('homeScreen').classList.remove('visible');
+  document.getElementById('clearedScreen').classList.remove('visible');
+  document.getElementById('caughtScreen').classList.remove('visible');
+  document.getElementById('mapOverlay').classList.remove('visible');
+  document.getElementById('hud').classList.add('visible');
+  document.getElementById('touchControls').classList.add('visible');
+  mapOpen = false;
+  buildCompassStrip();
+}
+
+function onLevelCleared(){
+  var res = computeScoreAndBrain();
+  keysCollected++;
+  gameState = 'cleared';
+  document.getElementById('clearedTitle').textContent = 'Trial Cleared';
+  document.getElementById('clearedTitle').style.color = 'var(--hedge)';
+  document.getElementById('clearedStats').innerHTML =
+    'Time: '+formatTime(elapsed)+'<br>Score: '+res.score+'<br>Brain: '+brain;
+  document.getElementById('clearedScreen').classList.add('visible');
+  document.getElementById('hud').classList.remove('visible');
+  document.getElementById('touchControls').classList.remove('visible');
+}
+
+function onRaceFinish(){
+  var res = computeScoreAndBrain();
+  var aheadFinished = 0, i;
+  for(i=0;i<rivals.length;i++) if(rivals[i].finished) aheadFinished++;
+  var place = aheadFinished+1;
+  gameState = 'cleared';
+  document.getElementById('clearedTitle').textContent = 'Grand Maze Complete';
+  document.getElementById('clearedTitle').style.color = 'var(--gold)';
+  document.getElementById('clearedStats').innerHTML =
+    'Finish position: '+ordinal(place)+'<br>Time: '+formatTime(elapsed)+'<br>Score: '+res.score+'<br>Brain: '+brain;
+  document.getElementById('clearedScreen').classList.add('visible');
+  document.getElementById('hud').classList.remove('visible');
+  document.getElementById('touchControls').classList.remove('visible');
+}
+
+function onCaught(){
+  gameState = 'caught';
+  attempt++;
+  document.getElementById('attemptLabel').textContent = 'Attempt '+attempt;
+  document.getElementById('caughtScreen').classList.add('visible');
+  document.getElementById('hud').classList.remove('visible');
+  document.getElementById('touchControls').classList.remove('visible');
+}
+
+function retryLevel(){
+  player.x = CS; player.z = CS; player.yaw = 0; player.pitch = 0;
+  elapsed = 0; peeks = 0; playerFurthestIdx = 0;
+  var i;
+  for(i=0;i<hunters.length;i++){
+    var h = hunters[i];
+    h.r = h.homeR; h.c = h.homeC; h.tr = h.homeR; h.tc = h.homeC; h.t = 1;
+    h.chasing = false; h.chaseT = CHASE_LIMIT; h.cool = 0; h.scale = 1; h._fadingIn = false;
+    var wp = cellWorldPos(h.r,h.c);
+    h.mesh.position.set(wp.x,0,wp.z);
+    h.mesh.scale.setScalar(1);
+  }
+  updateMapButtonLabel();
+  gameState = isGrand ? 'race' : 'playing';
+  document.getElementById('caughtScreen').classList.remove('visible');
+  document.getElementById('hud').classList.add('visible');
+  document.getElementById('touchControls').classList.add('visible');
+}
+
+/* =========================================================================
+   HUD
+   ========================================================================= */
+var compassLabels = [
+  {deg:0,label:'N'},{deg:45,label:'NE'},{deg:90,label:'E'},{deg:135,label:'SE'},
+  {deg:180,label:'S'},{deg:225,label:'SW'},{deg:270,label:'W'},{deg:315,label:'NW'}
+];
+var PX_PER_DEG = 3;
+function buildCompassStrip(){
+  var track = document.getElementById('compassTrack');
+  track.innerHTML = '';
+  var rep, i;
+  for(rep=-1; rep<=1; rep++){
+    for(i=0;i<compassLabels.length;i++){
+      var el = document.createElement('span');
+      el.className = 'compassTick'+(compassLabels[i].label==='N' ? ' north' : '');
+      el.textContent = compassLabels[i].label;
+      el.style.left = ((compassLabels[i].deg+rep*360)*PX_PER_DEG)+'px';
+      track.appendChild(el);
+    }
+  }
+}
+function updateCompass(){
+  var mapDir = new THREE.Vector3();
+  camera.getWorldDirection(mapDir);
+  var headingDeg = (Math.atan2(mapDir.x, -mapDir.z)*180/Math.PI + 360) % 360;
+  var track = document.getElementById('compassTrack');
+  track.style.transform = 'translateX('+(-(headingDeg*PX_PER_DEG))+'px)';
+}
+
+function updateHUD(){
+  if(gameState!=='playing' && gameState!=='race') return;
+
+  document.getElementById('hudMaze').textContent = isGrand ? 'Grand' : ('Trial '+level+'/5');
+  document.getElementById('hudBrain').textContent = brain;
+  document.getElementById('hudKeys').textContent = keysCollected+'/5';
+  document.getElementById('hudTime').textContent = formatTime(elapsed);
+  document.getElementById('hudMaps').textContent =
+    peeks<=FREE_PEEKS ? (Math.max(0,FREE_PEEKS-peeks)+' free') : ('+'+((peeks-FREE_PEEKS)*PEEK_COST)+'s');
+
+  var chasingCount = 0, worst = null, i;
+  for(i=0;i<hunters.length;i++){
+    if(hunters[i].chasing){
+      chasingCount++;
+      if(!worst || hunters[i].chaseT<worst.chaseT) worst = hunters[i];
+    }
+  }
+  document.getElementById('hudHunters').textContent =
+    hunters.length + (chasingCount>0 ? (' ('+chasingCount+' hunting)') : '');
+
+  var alertEl = document.getElementById('chaseAlert');
+  if(worst){
+    alertEl.classList.add('visible');
+    document.getElementById('chaseCountdown').textContent = Math.ceil(worst.chaseT)+'s';
+  } else {
+    alertEl.classList.remove('visible');
+  }
+
+  updateCompass();
+
+  var raceBoard = document.getElementById('raceBoard');
+  if(isGrand){
+    raceBoard.classList.add('visible');
+    var pct = G_pathList.length>1 ? (playerFurthestIdx/(G_pathList.length-1)) : 1;
+    document.getElementById('raceRowPlayer').style.width = Math.min(100,pct*100)+'%';
+    var j;
+    for(j=0;j<rivals.length;j++){
+      var bar = document.getElementById('raceRival'+j);
+      if(bar) bar.style.width = Math.min(100,rivals[j].progress*100)+'%';
+    }
+  } else {
+    raceBoard.classList.remove('visible');
+  }
+}
+
+/* =========================================================================
+   MAIN LOOP
+   ========================================================================= */
+function animate(){
+  requestAnimationFrame(animate);
+  var dt = Math.min(clock.getDelta(), 0.05);
+
+  if((gameState==='playing' || gameState==='race') && !mapOpen){
+    elapsed += dt;
+    updatePlayerMovement(dt);
+    updateHunters(dt);
+    checkCatch();
+    updateKeyAnim(dt);
+    updateGateCheck();
+    if(gameState==='race'){
+      updateRivals(dt);
+      updatePlayerRaceProgress();
+    }
+  }
+  updateHUD();
+  renderer.render(scene, camera);
+}
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+function init(){
+  setupRenderer();
+  setupTextures();
+  buildFirstPersonBody();
+  bindControls();
+  showHome();
+  requestAnimationFrame(animate);
+}
+init();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+
+})();
+</script>
+</body>
+</html>

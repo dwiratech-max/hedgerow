@@ -97,6 +97,24 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:v
 #mapBtnLabel{font-size:9px;font-family:'IBM Plex Mono',monospace;color:var(--paper);opacity:0.9;}
 #mapBtnLabel.pink{color:#ff7fb0;opacity:1;}
 
+#btnFire{right:160px;bottom:calc(112px + var(--safe-b));width:68px;height:68px;
+  background:radial-gradient(circle at 32% 26%, rgba(255,255,255,0.22), rgba(90,20,20,0) 42%),
+             linear-gradient(155deg, rgba(96,24,20,0.95), rgba(28,8,8,0.95));
+  border:1px solid rgba(220,70,60,0.7);flex-direction:column;gap:2px;}
+#btnFire:active{transform:scale(0.9);}
+#btnFire.empty{opacity:0.55;}
+#ammoLabel{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--paper);font-weight:600;}
+
+#crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:22px;height:22px;pointer-events:none;z-index:16;display:none;}
+#crosshair.visible{display:block;}
+#crosshair::before,#crosshair::after{content:'';position:absolute;background:rgba(238,240,232,0.85);
+  box-shadow:0 0 2px rgba(0,0,0,0.6);}
+#crosshair::before{left:50%;top:2px;bottom:2px;width:1.5px;transform:translateX(-50%);}
+#crosshair::after{top:50%;left:2px;right:2px;height:1.5px;transform:translateY(-50%);}
+#crosshairDot{position:absolute;left:50%;top:50%;width:3px;height:3px;border-radius:50%;
+  background:var(--pin);transform:translate(-50%,-50%);}
+
 /* ---------- overlay screens ---------- */
 .screen{position:fixed;inset:0;background:rgba(22,36,31,0.58);display:none;align-items:center;
   justify-content:center;z-index:30;}
@@ -192,7 +210,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:v
   <div class="ctrlBtn" id="btnTurnL">&#8634;</div>
   <div class="ctrlBtn" id="btnTurnR">&#8635;</div>
   <div class="ctrlBtn" id="btnMap"><span>&#9670;</span><span id="mapBtnLabel">10 free</span></div>
+  <div class="ctrlBtn" id="btnFire"><span>&#9679;</span><span id="ammoLabel">6</span></div>
 </div>
+<div id="crosshair"><div id="crosshairDot"></div></div>
 
 <div id="mapOverlay">
   <canvas id="mapCanvas"></canvas>
@@ -255,6 +275,10 @@ var E_SEE     = 5;
 var CHASE_LIMIT = 10;
 var CHASE_COOL  = 7;
 var SKY = 0x9FB6C4;
+var GUN_RANGE    = 16;   // max raycast distance for a shot to register
+var GUN_COOLDOWN = 0.35; // seconds between shots
+var START_AMMO   = 6;    // ammo per level attempt (resets on retry/new level)
+var DEFEAT_ANIM_TIME = 0.45;
 
 /* =========================================================================
    GLOBAL STATE
@@ -266,6 +290,12 @@ var player = { x:0, z:0, yaw:0, pitch:0 };
 var moveState = { fwd:false, back:false, left:false, right:false, turnL:false, turnR:false };
 var moveHoldStart = 0; // timestamp movement began; held past RUN_HOLD_MS = running
 var isRunning = false;
+
+var ammo = START_AMMO;
+var gunCooldown = 0;
+var gunFlashT = 0;
+var fireHeld = false;
+var gunRaycaster = null; // created after THREE is available (see initGun)
 var look = { dragging:false, lastX:0, lastY:0, touchId:null };
 
 var gameState = 'home'; // home | playing | race | cleared | caught
@@ -642,6 +672,7 @@ function setupRenderer(){
 
   camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.05, 200);
   camera.rotation.order = 'YXZ';
+  scene.add(camera); // required so children of the camera (first-person body, gun) actually render
 
   var canvasEl = document.getElementById('gameCanvas');
   renderer = new THREE.WebGLRenderer({ canvas:canvasEl, antialias:true });
@@ -837,6 +868,8 @@ function startLevel(spec){
 
   player.x = CS; player.z = CS; player.yaw = 0; player.pitch = 0;
   elapsed = 0; peeks = 0; attempt = 1; playerFurthestIdx = 0;
+  ammo = START_AMMO; gunCooldown = 0; gunFlashT = 0;
+  updateAmmoLabel();
   updateMapButtonLabel();
 
   if(isGrand) setupRivals(path.length);
@@ -848,10 +881,29 @@ function startLevel(spec){
 /* =========================================================================
    6. HUNTERS  (section 6 of the brief, LOCKED chase/escape cycle)
    ========================================================================= */
+// A few hard shading steps instead of smooth lighting - the classic
+// cel-shaded/anime look. Small procedural texture, no image files.
+var toonGradientTex = null;
+function getToonGradient(){
+  if(toonGradientTex) return toonGradientTex;
+  var canvas = document.createElement('canvas');
+  canvas.width = 4; canvas.height = 1;
+  var ctx = canvas.getContext('2d');
+  var shades = ['#0A0A0D','#1C1C22','#2E2E37','#42424C'];
+  var i;
+  for(i=0;i<4;i++){ ctx.fillStyle = shades[i]; ctx.fillRect(i,0,1,1); }
+  toonGradientTex = new THREE.CanvasTexture(canvas);
+  toonGradientTex.minFilter = THREE.NearestFilter;
+  toonGradientTex.magFilter = THREE.NearestFilter;
+  toonGradientTex.generateMipmaps = false;
+  return toonGradientTex;
+}
+
 function buildHunterMesh(){
   var g = new THREE.Group();
-  var bodyMat = new THREE.MeshStandardMaterial({ color:0x0A0A0C, roughness:0.9 });
+  var bodyMat = new THREE.MeshToonMaterial({ color:0x1a1a20, gradientMap:getToonGradient(), emissive:0x000000 });
   var eyeMat = new THREE.MeshBasicMaterial({ color:0xCC1414 });
+  g.userData.bodyMat = bodyMat;
 
   var torso = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.95,0.38), bodyMat);
   torso.position.y = 1.15;
@@ -895,11 +947,21 @@ function Hunter(spawnCell){
   this.phase = Math.random()*10;
   this.lastDir = null;
   this._fadingIn = false;
+  this.defeated = false;
+  this.defeatT = 0;
   this.mesh = buildHunterMesh();
+  this.mesh.userData.hunterRef = this; // lets a raycast hit find its way back to this Hunter
   scene.add(this.mesh);
   var wp = cellWorldPos(this.r, this.c);
   this.mesh.position.set(wp.x, 0, wp.z);
 }
+
+Hunter.prototype.defeat = function(){
+  if(this.defeated) return;
+  this.defeated = true;
+  this.defeatT = 0;
+  this.chasing = false;
+};
 
 Hunter.prototype.pickNext = function(cells, N, pathSet, playerR, playerC){
   var options = openDirsSafe(cells, N, this.r, this.c, pathSet);
@@ -930,6 +992,19 @@ Hunter.prototype.giveUp = function(){
 };
 
 Hunter.prototype.update = function(dt, cells, N, pathSet, playerCellR, playerCellC, playerOnPath){
+  if(this.defeated){
+    if(this.mesh.visible){
+      this.defeatT += dt;
+      var s = Math.max(0, 1 - this.defeatT/DEFEAT_ANIM_TIME);
+      this.mesh.scale.setScalar(s);
+      this.mesh.rotation.y += dt*14;
+      this.mesh.position.y = -this.defeatT*1.2;
+      var flashAmt = Math.max(0, 1 - this.defeatT/0.15);
+      this.mesh.userData.bodyMat.emissive.setRGB(flashAmt, flashAmt, flashAmt);
+      if(this.defeatT>DEFEAT_ANIM_TIME) this.mesh.visible = false;
+    }
+    return;
+  }
   if(this.cool>0){ this.cool -= dt; if(this.cool<0) this.cool = 0; }
 
   var manhattan = Math.abs(this.r-playerCellR) + Math.abs(this.c-playerCellC);
@@ -1009,6 +1084,107 @@ function checkCatch(){
 }
 
 /* =========================================================================
+   GUN / COMBAT (hunters became shootable - explicitly approved change to
+   what was originally an evade-only encounter)
+   ========================================================================= */
+function updateAmmoLabel(){
+  var lbl = document.getElementById('ammoLabel');
+  var btn = document.getElementById('btnFire');
+  if(!lbl || !btn) return;
+  lbl.textContent = ammo;
+  btn.classList.toggle('empty', ammo<=0);
+}
+
+function fireGun(){
+  if((gameState!=='playing' && gameState!=='race') || mapOpen) return;
+  if(gunCooldown>0) return;
+  gunCooldown = GUN_COOLDOWN;
+  if(ammo<=0){ playEmptyClickSound(); return; }
+  ammo--;
+  updateAmmoLabel();
+  gunFlashT = 0.07;
+  playGunshotSound();
+
+  if(!gunRaycaster) gunRaycaster = new THREE.Raycaster();
+  gunRaycaster.setFromCamera({ x:0, y:0 }, camera);
+  var targets = [], i;
+  for(i=0;i<hunters.length;i++){
+    if(!hunters[i].defeated) targets.push(hunters[i].mesh);
+  }
+  var hits = gunRaycaster.intersectObjects(targets, true);
+  if(hits.length>0 && hits[0].distance<=GUN_RANGE){
+    var obj = hits[0].object;
+    while(obj && !obj.userData.hunterRef) obj = obj.parent;
+    if(obj && obj.userData.hunterRef) obj.userData.hunterRef.defeat();
+  }
+}
+
+function updateGunVisuals(dt){
+  if(gunCooldown>0){ gunCooldown -= dt; if(gunCooldown<0) gunCooldown = 0; }
+  if(bodyParts.muzzleFlash){
+    if(gunFlashT>0){
+      gunFlashT -= dt;
+      bodyParts.muzzleFlash.visible = true;
+      bodyParts.muzzleFlash.scale.setScalar(0.8+Math.random()*0.5);
+      if(gunFlashT<=0) bodyParts.muzzleFlash.visible = false;
+    } else {
+      bodyParts.muzzleFlash.visible = false;
+    }
+  }
+}
+
+var gunNoiseBuffer = null;
+function ensureGunNoiseBuffer(){
+  if(gunNoiseBuffer || !audioCtx) return;
+  var len = Math.floor(audioCtx.sampleRate*0.3);
+  gunNoiseBuffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  var data = gunNoiseBuffer.getChannelData(0);
+  var i;
+  for(i=0;i<len;i++) data[i] = Math.random()*2-1;
+}
+
+function playGunshotSound(){
+  if(!audioCtx || !audioMaster) return;
+  ensureGunNoiseBuffer();
+  var now = audioCtx.currentTime;
+
+  var src = audioCtx.createBufferSource();
+  src.buffer = gunNoiseBuffer;
+  var filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 1300;
+  filter.Q.value = 0.7;
+  var g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.5, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now+0.16);
+  src.connect(filter); filter.connect(g); g.connect(audioMaster);
+  src.start(now); src.stop(now+0.2);
+
+  var thump = audioCtx.createOscillator();
+  thump.type = 'sine';
+  thump.frequency.setValueAtTime(120, now);
+  thump.frequency.exponentialRampToValueAtTime(40, now+0.08);
+  var tg = audioCtx.createGain();
+  tg.gain.setValueAtTime(0.4, now);
+  tg.gain.exponentialRampToValueAtTime(0.001, now+0.12);
+  thump.connect(tg); tg.connect(audioMaster);
+  thump.start(now); thump.stop(now+0.15);
+}
+
+function playEmptyClickSound(){
+  if(!audioCtx || !audioMaster) return;
+  var now = audioCtx.currentTime;
+  var osc = audioCtx.createOscillator();
+  osc.type = 'square';
+  osc.frequency.value = 800;
+  var g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.15, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now+0.04);
+  osc.connect(g); g.connect(audioMaster);
+  osc.start(now); osc.stop(now+0.05);
+}
+
+/* =========================================================================
    FIRST-PERSON BODY  (section 11 of the brief)
    ========================================================================= */
 function buildFirstPersonBody(){
@@ -1054,10 +1230,42 @@ function buildFirstPersonBody(){
     thumb.position.y = -0.018;
     thumbPivot.add(thumb);
     hand.add(thumbPivot);
+
+    if(side==='R'){
+      var gunMat = new THREE.MeshStandardMaterial({ color:0x9A9AA2, roughness:0.55, metalness:0.25 });
+      var gunAccent = new THREE.MeshStandardMaterial({ color:0xE0A82E, roughness:0.4, metalness:0.4 });
+      var gunGroup = new THREE.Group();
+      var gbody = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.13,0.32), gunMat);
+      gbody.position.set(0,0,0.08);
+      gunGroup.add(gbody);
+      var barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.023,0.22,10), gunMat);
+      barrel.rotation.x = Math.PI/2;
+      barrel.position.set(0,0.02,0.25);
+      gunGroup.add(barrel);
+      var grip = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.16,0.07), gunMat);
+      grip.rotation.x = -0.35;
+      grip.position.set(0,-0.10,-0.03);
+      gunGroup.add(grip);
+      var sight = new THREE.Mesh(new THREE.BoxGeometry(0.017,0.017,0.045), gunAccent);
+      sight.position.set(0,0.075,0.03);
+      gunGroup.add(sight);
+      var flashMat = new THREE.MeshBasicMaterial({ color:0xFFE9A8, transparent:true, opacity:0.95 });
+      var flash = new THREE.Mesh(new THREE.ConeGeometry(0.05,0.16,6), flashMat);
+      flash.rotation.x = -Math.PI/2;
+      flash.position.set(0,0.015,0.33);
+      flash.visible = false;
+      gunGroup.add(flash);
+      gunGroup.position.set(-0.02,0.03,-0.18);
+      gunGroup.rotation.x = -0.1;
+      hand.add(gunGroup);
+      bodyParts.gun = gunGroup;
+      bodyParts.muzzleFlash = flash;
+    }
+
     pivot.add(hand);
 
-    var sx = side==='L' ? -0.46 : 0.46;
-    pivot.position.set(sx, -0.55, -0.02);
+    var sx = side==='L' ? -0.18 : 0.18;
+    pivot.position.set(sx, 0.05, -0.6);
     pivot.rotation.z = side==='L' ? 0.30 : -0.30;
     pivot.rotation.y = side==='L' ? 0.16 : -0.16;
     pivot.rotation.x = -0.30;
@@ -1072,8 +1280,8 @@ function buildFirstPersonBody(){
     var shoe = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.09,0.24), shoeMat);
     shoe.position.set(0,-0.55,0.05);
     pivot.add(shoe);
-    var sx = side==='L' ? -0.17 : 0.17;
-    pivot.position.set(sx, -0.72, 0);
+    var sx = side==='L' ? -0.09 : 0.09;
+    pivot.position.set(sx, 0.15, -0.7);
     return pivot;
   }
 
@@ -1202,6 +1410,7 @@ function releaseAll(){
   moveState.turnL = moveState.turnR = false;
   look.dragging = false;
   look.touchId = null;
+  fireHeld = false;
 }
 
 function onKeyDown(e){
@@ -1213,6 +1422,7 @@ function onKeyDown(e){
   if(k==='q'||k==='arrowleft') moveState.turnL = true;
   if(k==='e'||k==='arrowright') moveState.turnR = true;
   if(k==='m') toggleMap();
+  if(k===' '||k==='f') fireHeld = true;
 }
 function onKeyUp(e){
   var k = e.key.toLowerCase();
@@ -1222,6 +1432,7 @@ function onKeyUp(e){
   if(k==='d') moveState.right = false;
   if(k==='q'||k==='arrowleft') moveState.turnL = false;
   if(k==='e'||k==='arrowright') moveState.turnR = false;
+  if(k===' '||k==='f') fireHeld = false;
 }
 
 function bindControls(){
@@ -1281,6 +1492,7 @@ function bindControls(){
   bindHoldButton('btnRight', function(v){ moveState.right = v; });
   bindHoldButton('btnTurnL', function(v){ moveState.turnL = v; });
   bindHoldButton('btnTurnR', function(v){ moveState.turnR = v; });
+  bindHoldButton('btnFire', function(v){ fireHeld = v; });
 
   document.getElementById('btnMap').addEventListener('click', toggleMap);
   document.getElementById('mapCloseBtn').addEventListener('click', toggleMap);
@@ -1504,6 +1716,7 @@ function showHome(){
   document.getElementById('mapOverlay').classList.remove('visible');
   document.getElementById('hud').classList.remove('visible');
   document.getElementById('touchControls').classList.remove('visible');
+  document.getElementById('crosshair').classList.remove('visible');
   mapOpen = false;
   updateHomeScreen();
 }
@@ -1537,6 +1750,7 @@ function showGameUI(){
   document.getElementById('mapOverlay').classList.remove('visible');
   document.getElementById('hud').classList.add('visible');
   document.getElementById('touchControls').classList.add('visible');
+  document.getElementById('crosshair').classList.add('visible');
   mapOpen = false;
   buildCompassStrip();
 }
@@ -1552,6 +1766,7 @@ function onLevelCleared(){
   document.getElementById('clearedScreen').classList.add('visible');
   document.getElementById('hud').classList.remove('visible');
   document.getElementById('touchControls').classList.remove('visible');
+  document.getElementById('crosshair').classList.remove('visible');
 }
 
 function onRaceFinish(){
@@ -1567,6 +1782,7 @@ function onRaceFinish(){
   document.getElementById('clearedScreen').classList.add('visible');
   document.getElementById('hud').classList.remove('visible');
   document.getElementById('touchControls').classList.remove('visible');
+  document.getElementById('crosshair').classList.remove('visible');
 }
 
 function onCaught(){
@@ -1576,19 +1792,25 @@ function onCaught(){
   document.getElementById('caughtScreen').classList.add('visible');
   document.getElementById('hud').classList.remove('visible');
   document.getElementById('touchControls').classList.remove('visible');
+  document.getElementById('crosshair').classList.remove('visible');
 }
 
 function retryLevel(){
   player.x = CS; player.z = CS; player.yaw = 0; player.pitch = 0;
   elapsed = 0; peeks = 0; playerFurthestIdx = 0;
+  ammo = START_AMMO; gunCooldown = 0; gunFlashT = 0;
+  updateAmmoLabel();
   var i;
   for(i=0;i<hunters.length;i++){
     var h = hunters[i];
     h.r = h.homeR; h.c = h.homeC; h.tr = h.homeR; h.tc = h.homeC; h.t = 1;
     h.chasing = false; h.chaseT = CHASE_LIMIT; h.cool = 0; h.scale = 1; h._fadingIn = false;
+    h.defeated = false; h.defeatT = 0;
     var wp = cellWorldPos(h.r,h.c);
     h.mesh.position.set(wp.x,0,wp.z);
     h.mesh.scale.setScalar(1);
+    h.mesh.visible = true;
+    h.mesh.userData.bodyMat.emissive.setRGB(0,0,0);
   }
   updateMapButtonLabel();
   gameState = isGrand ? 'race' : 'playing';
@@ -1637,15 +1859,16 @@ function updateHUD(){
   document.getElementById('hudMaps').textContent =
     peeks<=FREE_PEEKS ? (Math.max(0,FREE_PEEKS-peeks)+' free') : ('+'+((peeks-FREE_PEEKS)*PEEK_COST)+'s');
 
-  var chasingCount = 0, worst = null, i;
+  var chasingCount = 0, worst = null, aliveCount = 0, i;
   for(i=0;i<hunters.length;i++){
+    if(!hunters[i].defeated) aliveCount++;
     if(hunters[i].chasing){
       chasingCount++;
       if(!worst || hunters[i].chaseT<worst.chaseT) worst = hunters[i];
     }
   }
   document.getElementById('hudHunters').textContent =
-    hunters.length + (chasingCount>0 ? (' ('+chasingCount+' hunting)') : '');
+    aliveCount + (chasingCount>0 ? (' ('+chasingCount+' hunting)') : '');
 
   var alertEl = document.getElementById('chaseAlert');
   if(worst){
@@ -1798,6 +2021,8 @@ function animate(){
     checkCatch();
     updateKeyAnim(dt);
     updateGateCheck();
+    updateGunVisuals(dt);
+    if(fireHeld) fireGun();
     if(gameState==='race'){
       updateRivals(dt);
       updatePlayerRaceProgress();
@@ -1828,6 +2053,7 @@ function init(){
   buildFirstPersonBody();
   bindControls();
   initAudio();
+  updateAmmoLabel();
   showHome();
   requestAnimationFrame(animate);
   hideLoadingScreen();
